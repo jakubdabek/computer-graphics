@@ -19,33 +19,32 @@ const drawHilbert = (order: number) => {
     } else {
         order = Math.floor(order);
     }
- 
- 
+
+
     // Curve Constants
     const width = 2 ** order;
     const space = 10;
- 
+
     // SVG Setup
     const size = 800;
     const stroke = 2;
     const col = "red";
     const fill = "transparent";
- 
+
     // Prep and run function
     const f = hilbert(width, space, []);
     const points = f(0, 0, width, 0, 0, f);
     const path = points.join(' ');
- 
-    
-    return`<svg xmlns="http://www.w3.org/2000/svg" 
-    width="${size}" 
+
+
+    return`<svg xmlns="http://www.w3.org/2000/svg"
+    width="${size}"
     height="${size}"
     viewBox="${space / 2} ${space / 2} ${width * space} ${width * space}">
         <path d="M${path}" stroke-width="${stroke}" stroke="${col}" fill="${fill}"/>
     </svg>`;
- 
 };
- 
+
 const main = document.getElementById("main");
 
 const slider = <HTMLInputElement> document.getElementById("level");

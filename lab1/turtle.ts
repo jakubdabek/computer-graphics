@@ -114,15 +114,15 @@ class Turtle {
 
         this.x += length * Math.cos(this.angle);
         this.y += length * Math.sin(this.angle);
-        
+
         const realEnd = this.realCoordinates(this.x, this.y);
         console.log(`line ending in ${realEnd}`);
-        
+
         if (this.isPenDown) {
             this.context.lineTo(...realEnd);
             this.context.stroke();
         }
-        
+
     }
 
     public rotate(angle: number) {
@@ -168,7 +168,7 @@ class Turtle {
 
     public replay() {
         this.reset(false);
-        
+
         this.commands.forEach(command => {
             this.execute(command);
         });
@@ -177,20 +177,20 @@ class Turtle {
 
 const mainTurtle = () => {
     const canvas = <HTMLCanvasElement> document.getElementById("main");
-    
+
     const context = canvas.getContext("2d");
     context.translate(canvas.width / 2, canvas.height / 2);
-    context.scale(1, -1);    
-    
+    context.scale(1, -1);
+
     const turtle = new Turtle(context, [[-this.canvasWidth / 2, -this.canvasHeight / 2], [this.canvasWidth, this.canvasHeight]]);
-    
-    const commands = 
+
+    const commands =
     `
     PENUP
     ROTATE 135
     FORWARD 300
     ROTATE -135
-    
+
     PENDOWN
     FORWARD 100
     ROTATE 60
@@ -203,10 +203,10 @@ const mainTurtle = () => {
     FORWARD 100
     ROTATE 60
     FORWARD 100
-    
+
     PENUP
     FORWARD 100
-    
+
     SETCOLOR rgb(255,0,0)
     PENDOWN
     FORWARD 100
@@ -215,10 +215,10 @@ const mainTurtle = () => {
     ROTATE -120
     FORWARD 100
     ROTATE -60
-    
+
     PENUP
     FORWARD 200
-    
+
     SETCOLOR rgb(0,255,0)
     PENDOWN
     ROTATE 60
@@ -231,10 +231,10 @@ const mainTurtle = () => {
     FORWARD 100
     ROTATE 72
     FORWARD 100
-    
+
     PENUP
     FORWARD 150
-    
+
     SETCOLOR rgb(255,0,128)
     PENDOWN
     ARC 150
@@ -244,11 +244,11 @@ const mainTurtle = () => {
     ARC 75 false
     ARC 75 true
     `;
-    
+
     const input = <HTMLInputElement> document.getElementById("input");
     input.value = commands;
     const button = <HTMLInputElement> document.getElementById("button");
-    
+
     button.onclick = () => {
         turtle.reset();
         input.value.split('\n').forEach(element => {
@@ -256,6 +256,6 @@ const mainTurtle = () => {
             turtle.addCommandFromString(element);
         });
     }
-    
+
     button.click();
 }
