@@ -11,7 +11,7 @@ class Command {
     constructor(public kind: CommandType, public args: any[]) {}
 
     public static parse(s: string): Command {
-        const parts = s.split(' ');
+        const parts = s.trim().split(' ');
 
         console.log(`parsing ${parts}`);
 
@@ -36,8 +36,7 @@ class Command {
 }
 
 class Turtle {
-    private canvasWidth: number;
-    private canvasHeight: number;
+    private clearArea: [[number, number], [number, number]];
     private x: number;
     private y: number;
     private angle: number;
@@ -51,16 +50,16 @@ class Turtle {
         this.angle = 0;
         this.isPenDown = true;
 
-        this.context.clearRect(-this.canvasWidth / 2, -this.canvasHeight / 2, this.canvasWidth, this.canvasHeight);
+        const [[x, y], [width, height]] = this.clearArea;
+        this.context.clearRect(x, y, width, height);
 
         if (resetCommands)
             this.commands = [];
     }
 
-    constructor(context: CanvasRenderingContext2D) {
+    constructor(context: CanvasRenderingContext2D, clearArea: [[number, number], [number, number]]) {
         this.context = context;
-        this.canvasHeight = context.canvas.height;
-        this.canvasWidth = context.canvas.width;
+        this.clearArea = clearArea;
         this.reset();
     }
 
@@ -176,102 +175,87 @@ class Turtle {
     }
 }
 
-const canvas = <HTMLCanvasElement> document.getElementById("main");
-
-const context = canvas.getContext("2d");
-context.translate(canvas.width / 2, canvas.height / 2);
-context.scale(1, -1);
-
-// const iters = 20;
-// const oneWidth = canvas.width / (iters + 1);
-// const oneHeight = canvas.height / (iters + 1);
-
-// for (let i = 0; i < iters; i++) {
-//     context.fillStyle = `hsl(${360 / iters * i}, 100%, 50%)`;
-//     context.fillRect(oneWidth * i, oneHeight * i, (canvas.width - oneWidth * i * 2) , (canvas.height - oneHeight * i * 2) );
-// }
-
-
-const turtle = new Turtle(context);
-
-const commands = 
-`
-PENUP
-ROTATE 135
-FORWARD 300
-ROTATE -135
-
-PENDOWN
-FORWARD 100
-ROTATE 60
-FORWARD 100
-ROTATE 60
-FORWARD 100
-ROTATE 60
-FORWARD 100
-ROTATE 60
-FORWARD 100
-ROTATE 60
-FORWARD 100
-
-PENUP
-FORWARD 100
-
-SETCOLOR rgb(255,0,0)
-PENDOWN
-FORWARD 100
-ROTATE -120
-FORWARD 100
-ROTATE -120
-FORWARD 100
-ROTATE -60
-
-PENUP
-FORWARD 200
-
-SETCOLOR rgb(0,255,0)
-PENDOWN
-ROTATE 60
-FORWARD 100
-ROTATE 72
-FORWARD 100
-ROTATE 72
-FORWARD 100
-ROTATE 72
-FORWARD 100
-ROTATE 72
-FORWARD 100
-
-PENUP
-FORWARD 150
-
-SETCOLOR rgb(255,0,128)
-PENDOWN
-ARC 150
-ROTATE 180
-ARC 150
-ROTATE 180
-ARC 75 false
-ARC 75 true
-`;
-
-const input = <HTMLInputElement> document.getElementById("input");
-input.value = commands;
-const button = <HTMLInputElement> document.getElementById("button");
-
-button.onclick = () => {
-    turtle.reset();
-    input.value.split('\n').forEach(element => {
-        if (element.trim().length > 0)
+const mainTurtle = () => {
+    const canvas = <HTMLCanvasElement> document.getElementById("main");
+    
+    const context = canvas.getContext("2d");
+    context.translate(canvas.width / 2, canvas.height / 2);
+    context.scale(1, -1);    
+    
+    const turtle = new Turtle(context, [[-this.canvasWidth / 2, -this.canvasHeight / 2], [this.canvasWidth, this.canvasHeight]]);
+    
+    const commands = 
+    `
+    PENUP
+    ROTATE 135
+    FORWARD 300
+    ROTATE -135
+    
+    PENDOWN
+    FORWARD 100
+    ROTATE 60
+    FORWARD 100
+    ROTATE 60
+    FORWARD 100
+    ROTATE 60
+    FORWARD 100
+    ROTATE 60
+    FORWARD 100
+    ROTATE 60
+    FORWARD 100
+    
+    PENUP
+    FORWARD 100
+    
+    SETCOLOR rgb(255,0,0)
+    PENDOWN
+    FORWARD 100
+    ROTATE -120
+    FORWARD 100
+    ROTATE -120
+    FORWARD 100
+    ROTATE -60
+    
+    PENUP
+    FORWARD 200
+    
+    SETCOLOR rgb(0,255,0)
+    PENDOWN
+    ROTATE 60
+    FORWARD 100
+    ROTATE 72
+    FORWARD 100
+    ROTATE 72
+    FORWARD 100
+    ROTATE 72
+    FORWARD 100
+    ROTATE 72
+    FORWARD 100
+    
+    PENUP
+    FORWARD 150
+    
+    SETCOLOR rgb(255,0,128)
+    PENDOWN
+    ARC 150
+    ROTATE 180
+    ARC 150
+    ROTATE 180
+    ARC 75 false
+    ARC 75 true
+    `;
+    
+    const input = <HTMLInputElement> document.getElementById("input");
+    input.value = commands;
+    const button = <HTMLInputElement> document.getElementById("button");
+    
+    button.onclick = () => {
+        turtle.reset();
+        input.value.split('\n').forEach(element => {
+            if (element.trim().length > 0)
             turtle.addCommandFromString(element);
-    });
+        });
+    }
+    
+    button.click();
 }
-
-button.click();
-
-// onload = () => {
-//     commands.split('\n').forEach(element => {
-//         if (element.trim().length > 0)
-//             turtle.addCommandFromString(element);
-//     });
-// }
