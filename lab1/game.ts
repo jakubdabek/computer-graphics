@@ -1,31 +1,27 @@
-class Vec2D { constructor(public x: number, public y: number) {} }
-class Vec3D { constructor(public x: number, public y: number, public z: number) {} }
+class Vec2D {
+    constructor(public x: number, public y: number) {}
+
+    public add(other: Vec2D): Vec2D { return vec2(this.x + other.x, this.y + other.y); }
+    public mul(other: Vec2D): Vec2D { return vec2(this.x * other.x, this.y * other.y); }
+}
+
+const vec2 = (x: number, y: number) => new Vec2D(x, y);
+
+class Vec3D {
+    constructor(public x: number, public y: number, public z: number) {}
+
+    public add(other: Vec3D): Vec3D { return vec3(this.x + other.x, this.y + other.y, this.z + other.z); }
+    public mul(other: Vec3D): Vec3D { return vec3(this.x * other.x, this.y * other.y, this.z * other.z); }
+}
+
+const vec3 = (x: number, y: number, z: number) => new Vec3D(x, y, z);
+
 class Rotation {
     constructor(public roll: number, public pitch: number, public yaw: number) {}
     get x() { return this.roll; }
     get y() { return this.pitch; }
     get z() { return this.yaw; }
 }
-
-// type Vec2D = [number, number];
-// type Vec3D = [number, number, number];
-// type Rotation = [number, number, number];
-
-const vec2 = (x: number, y: number) => new Vec2D(x, y);
-const vec3 = (x: number, y: number, z: number) => new Vec3D(x, y, z);
-
-const addVec2D = ({x: x1, y: y1}: Vec2D, {x: x2, y: y2}: Vec2D): Vec2D =>
-    vec2(x1 + x2, y1 + y2);
-
-const mulVec2D = ({x: x1, y: y1}: Vec2D, {x: x2, y: y2}: Vec2D): Vec2D =>
-    vec2(x1 * x2, y1 * y2);
-
-const addVec3D = ({x: x1, y: y1, z: z1}: Vec3D, {x: x2, y: y2, z: z2}: Vec3D): Vec3D =>
-    vec3(x1 + x2, y1 + y2, z1 + z2);
-
-const mulVec3D = ({x: x1, y: y1, z: z1}: Vec3D, {x: x2, y: y2, z: z2}: Vec3D): Vec3D =>
-    vec3(x1 * x2, y1 * y2, z1 * z2);
-
 
 class Camera {
     constructor(
@@ -90,8 +86,8 @@ class Box {
 
         const getLine = ([beginInd, endInd]: [Vec3D, Vec3D]): [Vec3D, Vec3D] => {
             return [
-                addVec3D(this.vertex, mulVec3D(beginInd, this.size)),
-                addVec3D(this.vertex, mulVec3D(endInd, this.size)),
+                this.vertex.add(beginInd.mul(this.size)),
+                this.vertex.add(endInd.mul(this.size)),
             ];
         };
 
