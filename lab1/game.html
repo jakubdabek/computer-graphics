@@ -1,24 +1,67 @@
 <!DOCTYPE html>
 <html>
-    <head>
-    </head>
-    <body>
+
+<head>
+    <link rel="stylesheet" href="game.css">
+</head>
+
+<body>
+    <div id="canvas-wrapper">
         <canvas id="main" height="800" width="800" style="border:1px solid #000000;"></canvas>
-        <div id="controls">
-            <label for="cameraX">
-                <input type="range" min="-20" max="20" value="5" class="slider" id="cameraX">
-                camera x
-            </label>
-            <label for="cameraY">
-                <input type="range" min="-20" max="20" value="5" class="slider" id="cameraY">
-                camera y
-            </label>
-            <label for="cameraY">
-                <input type="range" min="-20" max="20" value="-5" class="slider" id="cameraZ">
-                camera z
-            </label>
-        </div>
-        <script src="js/game.js"></script>
-        <script lang="javascript">mainGame()</script>
-    </body>
+    </div>
+    <div id="controls">
+        <table>
+            <tr>
+                <td>camera x</td>
+                <td>
+                    <input type="range" min="-20" max="20" value="5" class="slider" id="cameraX">
+                </td>
+            </tr>
+            <tr>
+                <td>camera y</td>
+                <td>
+                    <input type="range" min="-20" max="20" value="5" class="slider" id="cameraY">
+                </td>
+            </tr>
+            <tr>
+                <td>camera z</td>
+                <td>
+                    <input type="range" min="-20" max="20" value="5" class="slider" id="cameraZ">
+                </td>
+            </tr>
+            <tr>
+                <td>near z</td>
+                <td>
+                    <input type="range" min="1" max="10" value="1" class="slider" id="nearZ">
+                </td>
+            </tr>
+            <tr>
+                <td>far z</td>
+                <td>
+                    <input type="range" min="30" max="100" value="40" class="slider" id="farZ">
+                </td>
+            </tr>
+            <tr>
+                <td>camera pitch</td>
+                <td>
+                    <input type="range" min="-180" max="180" value="0" class="slider" id="cameraPitch">
+                </td>
+            </tr>
+            <tr>
+                <td>camera roll</td>
+                <td>
+                    <input type="range" min="-180" max="180" value="0" class="slider" id="cameraRoll">
+                </td>
+            </tr>
+            <tr>
+                <td>camera yaw</td>
+                <td>
+                    <input type="range" min="-180" max="180" value="0" class="slider" id="cameraYaw">
+                </td>
+            </tr>
+        </table>
+    </div>
+    <script src="js/game.js"></script>
+</body>
+
 </html>

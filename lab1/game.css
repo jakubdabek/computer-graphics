@@ -1,0 +1,8 @@
+#canvas-wrapper {
+    display: inline-block;
+}
+
+#controls {
+    display: inline-block;
+    vertical-align: top;
+}

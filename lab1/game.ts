@@ -127,3 +127,5 @@ cameraZ.oninput = withRedraw(() => game.camera.position[2] = cameraZ.valueAsNumb
 const mainGame = () => {
     game.draw(context);
 };
+
+onload = mainGame;
