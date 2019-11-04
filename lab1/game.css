@@ -1,8 +1,20 @@
-#canvas-wrapper {
-    display: inline-block;
+body {
+    display: flex;
+    flex-wrap: nowrap;
+}
+
+li {
+    padding: 5px;
+}
+
+label {
+    padding: 10px;
 }
 
 #controls {
-    display: inline-block;
-    vertical-align: top;
+    margin: auto;
+}
+
+input {
+    width: 100%;
 }

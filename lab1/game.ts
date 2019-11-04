@@ -1,3 +1,6 @@
+const deg2rad = deg => deg / 180 * Math.PI;
+const rad2deg = rad => rad / Math.PI * 180;
+
 class Vec2D {
     constructor(public x: number, public y: number) {}
 
@@ -25,9 +28,9 @@ const vec3 = (x: number, y: number, z: number) => new Vec3D(x, y, z);
 
 class Rotation {
     constructor(public roll: number, public pitch: number, public yaw: number) {}
-    public get x() { return this.roll; }
-    public get y() { return this.pitch; }
-    public get z() { return this.yaw; }
+    public get x() { return this.pitch; }
+    public get y() { return this.yaw; }
+    public get z() { return this.roll; }
     public toString() { return `(${this.roll}, ${this.pitch}, ${this.yaw})`}
 
     public static readonly zero = new Rotation(0, 0, 0);
@@ -65,7 +68,12 @@ class Camera {
     }
 
     public normalizeViewVolume(relativePoint: Vec3D): Vec3D {
-        return null;
+        const xy = this.projection(relativePoint);
+
+        const midpoint = (this.farDistance + this.nearDistance) / 2;
+        const distance = this.farDistance - this.nearDistance;
+
+        return vec3(xy.x, xy.y, (relativePoint.z - midpoint) / distance);
     }
 
     public projection(relativePoint: Vec3D): Vec2D {
@@ -75,6 +83,22 @@ class Camera {
         );
     }
 }
+
+const clipLine = ([p1, p2]: [Vec3D, Vec3D]) => {
+    const outCodes = [
+        { pred: (p: Vec3D) => p.x > 1,  code: 0b100000 },
+        { pred: (p: Vec3D) => p.x < -1, code: 0b010000 },
+        { pred: (p: Vec3D) => p.y > 1,  code: 0b001000 },
+        { pred: (p: Vec3D) => p.y < -1, code: 0b000100 },
+        { pred: (p: Vec3D) => p.z > 1,  code: 0b000010 },
+        { pred: (p: Vec3D) => p.z < -1, code: 0b000001 },
+    ];
+
+    const getOutCode = p => outCodes.reduce((curr, {pred, code}) => pred(p) ? curr | code : curr, 0)
+
+    const out1 = getOutCode(p1);
+    const out2 = getOutCode(p2);
+};
 
 class Box {
     constructor(public vertex: Vec3D, public size: Vec3D) {}
@@ -123,8 +147,8 @@ class GameState {
                 const beginProjected = this.camera.projection(this.camera.getRelativePoint(begin));
                 const endProjected = this.camera.projection(this.camera.getRelativePoint(end));
                 console.log(`Projected: ${beginProjected} -> ${endProjected}`);
-                context.moveTo(beginProjected.x, beginProjected.y);
-                context.lineTo(endProjected.x, endProjected.y);
+                context.moveTo(beginProjected.x * context.canvas.width / 2, beginProjected.y * context.canvas.height / 2);
+                context.lineTo(endProjected.x * context.canvas.width / 2, endProjected.y * context.canvas.height / 2);
             });
         });
 
@@ -136,8 +160,9 @@ const canvas = <HTMLCanvasElement> document.getElementById("main");
 const context = canvas.getContext("2d");
 context.translate(canvas.width / 2, canvas.height / 2);
 context.scale(1, -1);
+// context.scale(canvas.width / 2, canvas.height / 2);
 
-const game = new GameState(new Camera(), [new Box(vec3(10, 10, 10), vec3(50, 50, 50))]);
+const game = new GameState(new Camera(), [new Box(vec3(-10, -10, 10), vec3(50, 50, 50))]);
 
 const withRedraw = f => () => { f(); game.draw(context); }
 
@@ -150,10 +175,10 @@ const updateProperty = (obj: any, path: string) => {
 };
 
 
-const updateOnInput = (elementId: string, path: string) => {
+const updateOnInput = (elementId: string, path: string, transform?: (x: number)=>number) => {
     const element = <HTMLInputElement> document.getElementById(elementId);
     const updateProp = updateProperty(game, path);
-    const update = () => updateProp(element.valueAsNumber);
+    const update = () => updateProp(transform ? transform(element.valueAsNumber) : element.valueAsNumber);
     update();
     element.oninput = withRedraw(update);
 };
@@ -164,9 +189,9 @@ const mainGame = () => {
     updateOnInput("cameraY", "camera.position.y");
     updateOnInput("cameraZ", "camera.position.z");
     
-    updateOnInput("cameraRoll", "camera.rotation.roll");
-    updateOnInput("cameraPitch", "camera.rotation.pitch");
-    updateOnInput("cameraYaw", "camera.rotation.yaw");
+    updateOnInput("cameraRoll", "camera.rotation.roll", deg2rad);
+    updateOnInput("cameraPitch", "camera.rotation.pitch", deg2rad);
+    updateOnInput("cameraYaw", "camera.rotation.yaw", deg2rad);
     
     updateOnInput("fov", "camera.fov");
     updateOnInput("nearDistance", "camera.nearDistance");

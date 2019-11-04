@@ -11,60 +11,42 @@
     </div>
     <div id="controls">
         <table>
-            <tr>
-                <td>camera x</td>
-                <td>
-                    <input type="range" min="-20" max="20" value="5" class="slider" id="cameraX">
-                </td>
-            </tr>
-            <tr>
-                <td>camera y</td>
-                <td>
-                    <input type="range" min="-20" max="20" value="5" class="slider" id="cameraY">
-                </td>
-            </tr>
-            <tr>
-                <td>camera z</td>
-                <td>
-                    <input type="range" min="-20" max="20" value="5" class="slider" id="cameraZ">
-                </td>
-            </tr>
-            <tr>
-                <td>FOV</td>
-                <td>
-                    <input type="range" min="20" max="140" value="90" class="slider" id="fov">
-                </td>
-            </tr>
-            <tr>
-                <td>near z</td>
-                <td>
-                    <input type="range" min="1" max="10" value="1" class="slider" id="nearDistance">
-                </td>
-            </tr>
-            <tr>
-                <td>far z</td>
-                <td>
-                    <input type="range" min="30" max="100" value="40" class="slider" id="farDistance">
-                </td>
-            </tr>
-            <tr>
-                <td>camera pitch</td>
-                <td>
-                    <input type="range" min="-180" max="180" value="0" class="slider" id="cameraPitch">
-                </td>
-            </tr>
-            <tr>
-                <td>camera roll</td>
-                <td>
-                    <input type="range" min="-180" max="180" value="0" class="slider" id="cameraRoll">
-                </td>
-            </tr>
-            <tr>
-                <td>camera yaw</td>
-                <td>
-                    <input type="range" min="-180" max="180" value="0" class="slider" id="cameraYaw">
-                </td>
-            </tr>
+            <li>
+                <label for="cameraX">camera x</label>
+                <input type="number" min="-20" max="20" value="0" class="number-input" id="cameraX">
+            </li>
+            <li>
+                <label for="cameraY">camera y</label>
+                <input type="number" min="-20" max="20" value="0" class="number-input" id="cameraY">
+            </li>
+            <li>
+                <label for="cameraZ">camera z</label>
+                <input type="number" min="-20" max="20" value="-10" class="number-input" id="cameraZ">
+            </li>
+            <li>
+                <label for="fov">FOV</label>
+                <input type="number" min="20" max="140" value="90" class="number-input" id="fov">
+            </li>
+            <li>
+                <label for="nearDistance">near z</label>
+                <input type="number" min="1" max="10" value="1" class="number-input" id="nearDistance">
+            </li>
+            <li>
+                <label for="farDistance">far z</label>
+                <input type="number" min="30" max="100" value="40" class="number-input" id="farDistance">
+            </li>
+            <li>
+                <label for="cameraPitch">camera pitch</label>
+                <input type="number" min="-180" max="180" value="0" class="number-input" id="cameraPitch">
+            </li>
+            <li>
+                <label for="cameraRoll">camera roll</label>
+                <input type="number" min="-180" max="180" value="0" class="number-input" id="cameraRoll">
+            </li>
+            <li>
+                <label for="cameraYaw">camera yaw</label>
+                <input type="number" min="-180" max="180" value="0" class="number-input" id="cameraYaw">
+            </li>
         </table>
     </div>
     <script src="js/game.js"></script>
