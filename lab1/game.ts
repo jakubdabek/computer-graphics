@@ -218,17 +218,20 @@ class GameState {
         context.clearRect(-context.canvas.width / 2, - context.canvas.height / 2, context.canvas.width, context.canvas.height);
 
         context.beginPath();
-        this.shapes.forEach(box => {
-            box.getLines().forEach(([begin, end]: [Vec3D, Vec3D]) => {
+        this.shapes.forEach(shape => {
+            shape.getLines().forEach(([begin, end]: [Vec3D, Vec3D]) => {
                 console.log(`Drawing line: ${begin} -> ${end}`);
+
                 const beginRel = this.camera.getRelativePoint(begin);
                 const endRel = this.camera.getRelativePoint(end);
 
                 console.log(`Relative: ${beginRel} -> ${beginRel}`);
 
                 const normalized = this.camera.normalizeViewVolume([beginRel, endRel]);
+
                 if (normalized == null)
                     return;
+
                 const [beginNormalized, endNormalized] = normalized;
 
                 console.log(`Normalized: ${beginNormalized} -> ${beginNormalized}`);
