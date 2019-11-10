@@ -1,49 +1,60 @@
-export const deg2rad = deg => deg / 180 * Math.PI;
-export const rad2deg = rad => rad / Math.PI * 180;
+export { deg2rad, rad2deg, Vec2D, vec2, Vec3D, vec3, Rotation, rot, Camera, clipLine, Shape, Box, DrawingContext3D };
 
-export class Vec2D {
+const deg2rad = deg => deg / 180 * Math.PI;
+const rad2deg = rad => rad / Math.PI * 180;
+
+class Vec2D {
     constructor(public x: number, public y: number) {}
 
     public add(other: Vec2D): Vec2D { return vec2(this.x + other.x, this.y + other.y); }
     public sub(other: Vec2D): Vec2D { return vec2(this.x - other.x, this.y - other.y); }
     public mul(other: Vec2D): Vec2D { return vec2(this.x * other.x, this.y * other.y); }
+    public mulScalar(other: number): Vec2D { return vec2(this.x * other, this.y * other); }
 
     public toString() { return `(${this.x}, ${this.y})`}
 
-    static readonly zero = new Vec2D(0, 0);
+    public static get zero() { return new Vec2D(0, 0); }
 }
 
-export const vec2 = (x: number, y: number) => new Vec2D(x, y);
+const vec2 = (x: number, y: number) => new Vec2D(x, y);
 
-export class Vec3D {
+class Vec3D {
     constructor(public x: number, public y: number, public z: number) {}
 
     public add(other: Vec3D): Vec3D { return vec3(this.x + other.x, this.y + other.y, this.z + other.z); }
     public sub(other: Vec3D): Vec3D { return vec3(this.x - other.x, this.y - other.y, this.z - other.z); }
     public mul(other: Vec3D): Vec3D { return vec3(this.x * other.x, this.y * other.y, this.z * other.z); }
-
+    public mulScalar(other: number): Vec3D { return vec3(this.x * other, this.y * other, this.z * other); }
+    
     public toString() { return `(${this.x}, ${this.y}, ${this.z})`}
-
-    static readonly zero = new Vec3D(0, 0, 0);
+    
+    public static get zero() { return new Vec3D(0, 0, 0) };
 }
 
-export const vec3 = (x: number, y: number, z: number) => new Vec3D(x, y, z);
+const vec3 = (x: number, y: number, z: number) => new Vec3D(x, y, z);
 
-export class Rotation {
+class Rotation {
     constructor(public roll: number, public pitch: number, public yaw: number) {}
     public get x() { return this.pitch; }
     public get y() { return this.yaw; }
     public get z() { return this.roll; }
+    
+    public add(other: Rotation): Rotation { return rot(this.x + other.x, this.y + other.y, this.z + other.z); }
+    public sub(other: Rotation): Rotation { return rot(this.x - other.x, this.y - other.y, this.z - other.z); }
+    public mul(other: Rotation): Rotation { return rot(this.x * other.x, this.y * other.y, this.z * other.z); }
+    public mulScalar(other: number): Rotation { return rot(this.x * other, this.y * other, this.z * other); }
+
     public toString() { return `(${this.roll}, ${this.pitch}, ${this.yaw})`}
 
-    public static readonly zero = new Rotation(0, 0, 0);
+    public static get zero() { return new Rotation(0, 0, 0); }
 }
 
-export class Camera {
+const rot = (roll: number, pitch: number, yaw: number) => new Rotation(roll, pitch, yaw);
+
+class Camera {
     constructor(
         public position: Vec3D = Vec3D.zero,
         public rotation: Rotation = Rotation.zero,
-        public fov: number = 0,
         public nearDistance: number = 0,
         public farDistance: number = 0,
     ) {}
@@ -102,6 +113,8 @@ export class Camera {
             this.nearDistance / relativePoint.z * relativePoint.y,
         );
     }
+
+    public toString() { return "Camera" }
 }
 
 const POSITIVE_X = 0b100000;
@@ -111,7 +124,7 @@ const NEGATIVE_Y = 0b000100;
 const POSITIVE_Z = 0b000010;
 const NEGATIVE_Z = 0b000001;
 
-export const clipLine = ([p1, p2]: [Vec3D, Vec3D]): [Vec3D, Vec3D] | null => {
+const clipLine = ([p1, p2]: [Vec3D, Vec3D]): [Vec3D, Vec3D] | null => {
     const outCodes = [
         { pred: (p: Vec3D) => p.x > 1,  code: POSITIVE_X },
         { pred: (p: Vec3D) => p.x < -1, code: NEGATIVE_X },
@@ -173,11 +186,11 @@ export const clipLine = ([p1, p2]: [Vec3D, Vec3D]): [Vec3D, Vec3D] | null => {
     console.log(`couldn't clip ${p1} -> ${p2}`);
 };
 
-export interface Shape {
+interface Shape {
     getLines(): [Vec3D, Vec3D][];
 }
 
-export class Box implements Shape {
+class Box implements Shape {
     constructor(public vertex: Vec3D, public size: Vec3D) {}
 
     public getLines(): [Vec3D, Vec3D][] {
@@ -209,4 +222,59 @@ export class Box implements Shape {
 
         return lineIndicators.map(getLine);
     }
+}
+
+class DrawingContext3D {
+    public camera: Camera;
+
+    constructor(private context: CanvasRenderingContext2D) {
+        context.translate(context.canvas.width / 2, context.canvas.height / 2);
+        context.scale(1, -1);
+
+        this.camera = new Camera();
+    }
+
+    public clearScreen() {
+        this.context.clearRect(-this.context.canvas.width / 2, - this.context.canvas.height / 2, this.context.canvas.width, this.context.canvas.height);
+    }
+
+    public setColor(color: string) {
+        this.context.strokeStyle = color;
+    }
+
+    public drawLine(line: [Vec3D, Vec3D]) {
+        const [begin, end] = line;
+            
+        console.log(`Drawing line: ${begin} -> ${end}`);
+
+        const beginRel = this.camera.getRelativePoint(begin);
+        const endRel = this.camera.getRelativePoint(end);
+
+        console.log(`Relative: ${beginRel} -> ${endRel}`);
+
+        const normalized = this.camera.normalizeViewVolume([beginRel, endRel]);
+
+        if (normalized == null)
+            return;
+
+        const [beginNormalized, endNormalized] = normalized;
+
+        console.log(`Normalized: ${beginNormalized} -> ${endNormalized}`);
+
+        const clipped = clipLine([beginNormalized, endNormalized]);
+
+        if (clipped == null)
+            return;
+
+        const [beginClipped, endClipped] = clipped;
+
+        console.log(`Projected: ${beginClipped} -> ${endClipped}`);
+
+        this.context.beginPath();
+        this.context.moveTo(beginClipped.x * this.context.canvas.width / 2, beginClipped.y * this.context.canvas.height / 2);
+        this.context.lineTo(endClipped.x * this.context.canvas.width / 2, endClipped.y * this.context.canvas.height / 2);
+        this.context.stroke();
+    }
+
+    public toString() { return "DrawingContext3D" }
 }
