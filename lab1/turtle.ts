@@ -1,4 +1,4 @@
-enum CommandType {
+export enum CommandType {
     FORWARD,
     ROTATE,
     ARC,
@@ -7,13 +7,17 @@ enum CommandType {
     SETCOLOR,
 }
 
+let log = (...args) => {};
+
+export const setLog = f => log = f;
+
 class Command {
     constructor(public kind: CommandType, public args: any[]) {}
 
     public static parse(s: string): Command {
         const parts = s.trim().split(' ');
 
-        console.log(`parsing ${parts}`);
+        log(`parsing ${parts}`);
 
         switch (parts[0]) {
             case "FORWARD":
@@ -35,7 +39,7 @@ class Command {
     }
 }
 
-class Turtle {
+export class Turtle {
     private x: number;
     private y: number;
     private angle: number;
@@ -49,7 +53,7 @@ class Turtle {
         this.isPenDown = true;
 
         const [[x, y], [width, height]] = this.clearArea;
-        console.log(`Clearing ${this.clearArea}`);
+        log(`Clearing ${this.clearArea}`);
         this.context.clearRect(x, y, width, height);
 
         if (resetCommands)
@@ -107,13 +111,13 @@ class Turtle {
 
         const realStart = this.realCoordinates(this.x, this.y);
         this.context.moveTo(...realStart);
-        console.log(`line starting in ${realStart}`);
+        log(`line starting in ${realStart}`);
 
         this.x += length * Math.cos(this.angle);
         this.y += length * Math.sin(this.angle);
 
         const realEnd = this.realCoordinates(this.x, this.y);
-        console.log(`line ending in ${realEnd}`);
+        log(`line ending in ${realEnd}`);
 
         if (this.isPenDown) {
             this.context.lineTo(...realEnd);
@@ -131,7 +135,7 @@ class Turtle {
 
         const realStart = this.realCoordinates(this.x, this.y);
         this.context.moveTo(...realStart);
-        console.log(`arc starting in ${realStart}`);
+        log(`arc starting in ${realStart}`);
 
         const midX = this.x + length * Math.cos(this.angle) / 2;
         const midY = this.y + length * Math.sin(this.angle) / 2;
@@ -142,7 +146,7 @@ class Turtle {
         this.y += length * Math.sin(this.angle);
 
         const realEnd = this.realCoordinates(this.x, this.y);
-        console.log(`arc ending in ${realEnd}`);
+        log(`arc ending in ${realEnd}`);
 
         if (this.isPenDown) {
             // @ts-ignore buggy spread operator
@@ -170,89 +174,4 @@ class Turtle {
             this.execute(command);
         });
     }
-}
-
-const mainTurtle = () => {
-    const canvas = <HTMLCanvasElement> document.getElementById("main");
-
-    const context = canvas.getContext("2d");
-    context.translate(canvas.width / 2, canvas.height / 2);
-    context.scale(1, -1);
-
-    const turtle = new Turtle(context, [[-canvas.width / 2, -canvas.height / 2], [canvas.width, canvas.height]]);
-
-    const commands =
-    `
-    PENUP
-    ROTATE 135
-    FORWARD 300
-    ROTATE -135
-
-    PENDOWN
-    FORWARD 100
-    ROTATE 60
-    FORWARD 100
-    ROTATE 60
-    FORWARD 100
-    ROTATE 60
-    FORWARD 100
-    ROTATE 60
-    FORWARD 100
-    ROTATE 60
-    FORWARD 100
-
-    PENUP
-    FORWARD 100
-
-    SETCOLOR rgb(255,0,0)
-    PENDOWN
-    FORWARD 100
-    ROTATE -120
-    FORWARD 100
-    ROTATE -120
-    FORWARD 100
-    ROTATE -60
-
-    PENUP
-    FORWARD 200
-
-    SETCOLOR rgb(0,255,0)
-    PENDOWN
-    ROTATE 60
-    FORWARD 100
-    ROTATE 72
-    FORWARD 100
-    ROTATE 72
-    FORWARD 100
-    ROTATE 72
-    FORWARD 100
-    ROTATE 72
-    FORWARD 100
-
-    PENUP
-    FORWARD 150
-
-    SETCOLOR rgb(255,0,128)
-    PENDOWN
-    ARC 150
-    ROTATE 180
-    ARC 150
-    ROTATE 180
-    ARC 75 false
-    ARC 75 true
-    `;
-
-    const input = <HTMLInputElement> document.getElementById("input");
-    input.value = commands;
-    const button = <HTMLInputElement> document.getElementById("button");
-
-    button.onclick = () => {
-        turtle.reset();
-        input.value.split('\n').forEach(element => {
-            if (element.trim().length > 0)
-            turtle.addCommandFromString(element);
-        });
-    }
-
-    button.click();
 }

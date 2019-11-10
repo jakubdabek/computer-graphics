@@ -1,3 +1,5 @@
+import { Turtle, CommandType } from "./turtle.js";
+
 const mainHilbert = () => {
     const canvas = <HTMLCanvasElement> document.getElementById("main");
 
@@ -44,8 +46,8 @@ const mainHilbert = () => {
         // console.log(curve);
     }
 
-    onload = () => {
-        turtle.reset();
-        hilbert_curve(turtle, (canvas.width - 20) / 2 ** slider.valueAsNumber, 1, slider.valueAsNumber);
-    }
+    turtle.reset();
+    hilbert_curve(turtle, (canvas.width - 20) / 2 ** slider.valueAsNumber, 1, slider.valueAsNumber);
 }
+
+document.body.onload = mainHilbert;
