@@ -36,12 +36,10 @@ class Command {
 }
 
 class Turtle {
-    private clearArea: [[number, number], [number, number]];
     private x: number;
     private y: number;
     private angle: number;
     private isPenDown: boolean = true;
-    private context: CanvasRenderingContext2D;
     private commands: Command[];
 
     public reset(resetCommands: boolean = true) {
@@ -51,15 +49,14 @@ class Turtle {
         this.isPenDown = true;
 
         const [[x, y], [width, height]] = this.clearArea;
+        console.log(`Clearing ${this.clearArea}`);
         this.context.clearRect(x, y, width, height);
 
         if (resetCommands)
             this.commands = [];
     }
 
-    constructor(context: CanvasRenderingContext2D, clearArea: [[number, number], [number, number]]) {
-        this.context = context;
-        this.clearArea = clearArea;
+    constructor(private context: CanvasRenderingContext2D, private clearArea: [[number, number], [number, number]]) {
         this.reset();
     }
 
@@ -182,7 +179,7 @@ const mainTurtle = () => {
     context.translate(canvas.width / 2, canvas.height / 2);
     context.scale(1, -1);
 
-    const turtle = new Turtle(context, [[-this.canvasWidth / 2, -this.canvasHeight / 2], [this.canvasWidth, this.canvasHeight]]);
+    const turtle = new Turtle(context, [[-canvas.width / 2, -canvas.height / 2], [canvas.width, canvas.height]]);
 
     const commands =
     `
