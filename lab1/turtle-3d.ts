@@ -22,7 +22,7 @@ const parseCommandType3D = (kind: string, args: string[]): { kind: CommandType3D
                 parsedArgs: [ rot(
                     deg2rad(parseFloat(args[0])),
                     deg2rad(parseFloat(args[1])),
-                    deg2rad(parseFloat(args[2])),
+                    0,
                 )]
             };
         case "PENUP":

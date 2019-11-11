@@ -23,13 +23,29 @@ const mainTurtle = () => {
     const turtle = new Turtle3D(context);
     turtle.setLog(console.log);
 
-    const commands = `
-PENUP
+    const commands =
+`PENUP
 FORWARD 15
-ROTATE 0 0
+ROTATE 0 90
+FORWARD 5
+ROTATE 90 -90
+PENDOWN
+FORWARD 5
+ROTATE -90 -90
+FORWARD 10
+ROTATE -90 90
+FORWARD 5
+ROTATE 90 0
+FORWARD 20
+SETCOLOR rgb(100,255,0)
+ROTATE 90 0
 FORWARD 15
-ROTATE 0 0 90
-FORWARD 15`
+ROTATE -90 90
+FORWARD 10
+ROTATE -90 -90
+FORWARD 15
+ROTATE -90 0
+FORWARD 20`
 
     const input = <HTMLInputElement> document.getElementById("input");
     input.value = commands;

@@ -44,12 +44,12 @@ class Rotation {
     public mul(other: Rotation): Rotation { return rot(this.x * other.x, this.y * other.y, this.z * other.z); }
     public mulScalar(other: number): Rotation { return rot(this.x * other, this.y * other, this.z * other); }
 
-    public toString() { return `(${this.roll}, ${this.pitch}, ${this.yaw})`}
+    public toString() { return `(${this.x}, ${this.y}, ${this.z})`}
 
     public static get zero() { return new Rotation(0, 0, 0); }
 }
 
-const rot = (roll: number, pitch: number, yaw: number) => new Rotation(roll, pitch, yaw);
+const rot = (pitch: number, yaw: number, roll: number) => new Rotation(roll, pitch, yaw);
 
 class Camera {
     constructor(
@@ -188,6 +188,7 @@ const clipLine = ([p1, p2]: [Vec3D, Vec3D]): [Vec3D, Vec3D] | null => {
 
 interface Shape {
     getLines(): [Vec3D, Vec3D][];
+    isInside(point: Vec3D): boolean;
 }
 
 class Box implements Shape {
@@ -221,6 +222,14 @@ class Box implements Shape {
         };
 
         return lineIndicators.map(getLine);
+    }
+
+    public isInside(point: Vec3D): boolean {
+        const vertex2 = this.vertex.add(this.size);
+        return point.x > this.vertex.x && point.x < vertex2.x &&
+            point.y > this.vertex.y && point.y < vertex2.y &&
+            point.z > this.vertex.z && point.z < vertex2.z
+            ;
     }
 }
 
