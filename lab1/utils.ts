@@ -1,4 +1,4 @@
-export { updateProperty };
+export { updateProperty, rand };
 
 const updateProperty = (obj: any, path: string) => {
     const pathSegments = path.split('.');
@@ -16,3 +16,8 @@ const updateProperty = (obj: any, path: string) => {
             innerObject[lastSegment] = transform(innerObject[lastSegment]);
     }
 };
+
+const rand = (bottom: number, top: number) => {
+    const val = Math.random();
+    return val * (top - bottom) + bottom;
+}

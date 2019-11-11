@@ -1,5 +1,5 @@
 import { Camera, Shape, Vec3D, vec3, clipLine, Box, deg2rad, DrawingContext3D } from "./render-3d.js"
-import { updateProperty } from "./utils.js";
+import { updateProperty, rand } from "./utils.js";
 
 enum State { Normal, Win, Loss }
 
@@ -96,10 +96,37 @@ class GameState {
 const canvas = <HTMLCanvasElement> document.getElementById("main");
 const context = canvas.getContext("2d");
 
-// context.scale(canvas.width / 2, canvas.height / 2);
+const obstaclesNum = rand(3, 10);
 
-const game = new GameState(context, [new Box(vec3(-10, -10, 10), vec3(50, 50, 50))], new Box(vec3(-20, -20, 20), vec3(15, 15, 15)));
-// const game = new GameState(new Camera(), [{getLines: ()=>[[vec3(-10, 0, 10), vec3(10, 0, 10)]]}]);
+const obstacles: Shape[] = [];
+for (let i = 0; i < obstaclesNum; i++) {
+    const pos = vec3(rand(-50, 50), rand(-50, 50), rand(-50, 50));
+    const size = vec3(rand(10, 50), rand(10, 50), rand(10, 50));
+
+    obstacles.push(new Box(pos, size));
+}
+
+let winningShape: Shape;
+
+while (true) {
+    const pos = vec3(rand(-50, 50), rand(-50, 50), rand(-50, 50));
+    const size = vec3(15, 15, 15);
+    const other = pos.add(size);
+
+    const points = [pos.x, pos.y, pos.z, other.x, other.y, other.z];
+
+    const anyInObstacles = obstacles
+        .map(s => s.isInside(pos) || s.isInside(other))
+        .reduce((prev, curr) => prev || curr, false);
+    
+    if (!anyInObstacles) {
+        winningShape = new Box(pos, size);
+        break;
+    }
+}
+
+// const game = new GameState(context, [new Box(vec3(-10, -10, 10), vec3(50, 50, 50))], new Box(vec3(-20, -20, 20), vec3(15, 15, 15)));
+const game = new GameState(context, obstacles, winningShape);
 
 const withRedraw = f => () => { f(); game.draw(); }
 
