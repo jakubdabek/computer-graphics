@@ -228,14 +228,19 @@ const showcaseMain = () => {
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    const shaderProgram = WebGlUtils.initShaderProgram(gl, vsSource, fsSource);
+    const attribLocations = {
+        vertexPosition: 0,
+        vertexColor: 1,
+    }
+
+    const shaderProgram = WebGlUtils.initShaderProgram(gl, vsSource, fsSource, program => {
+        gl.bindAttribLocation(program, attribLocations.vertexPosition, 'aVertexPosition');
+        gl.bindAttribLocation(program, attribLocations.vertexColor, 'aVertexColor');
+    });
 
     const programInfo = {
         program: shaderProgram,
-        attribLocations: {
-            vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
-            vertexColor: gl.getAttribLocation(shaderProgram, 'aVertexColor'),
-        },
+        attribLocations,
         uniformLocations: {
             projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
             modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),

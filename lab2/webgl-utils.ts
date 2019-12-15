@@ -1,12 +1,21 @@
 export { WebGlUtils };
 
-const initShaderProgram = (gl: WebGLRenderingContext, vsSource: string, fsSource: string) => {
+const initShaderProgram = (
+    gl: WebGLRenderingContext,
+    vsSource: string,
+    fsSource: string,
+    bindAttribLocations: (program: WebGLProgram) => void = null
+) => {
     const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
     const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
 
     const shaderProgram = gl.createProgram();
     gl.attachShader(shaderProgram, vertexShader);
     gl.attachShader(shaderProgram, fragmentShader);
+
+    if (bindAttribLocations)
+        bindAttribLocations(shaderProgram);
+
     gl.linkProgram(shaderProgram);
 
     if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
