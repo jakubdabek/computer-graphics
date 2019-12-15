@@ -42,7 +42,29 @@ const loadShader = (gl: WebGLRenderingContext, type: number, source: string) => 
     return shader;
 };
 
+const getData = (gl: WebGLRenderingContext, program: WebGLProgram) => {
+    const numAttribs = gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES);
+    const attribs = [];
+    for (let i = 0; i < numAttribs; ++i) {
+        const info = gl.getActiveAttrib(program, i);
+        attribs.push(info);
+    }
+
+    const numUniforms = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
+    const uniforms = [];
+    for (let i = 0; i < numUniforms; ++i) {
+        const info = gl.getActiveUniform(program, i);
+        uniforms.push(info);
+    }
+
+    return {
+        attribs,
+        uniforms,
+    };
+};
+
 const WebGlUtils = {
     initShaderProgram,
     loadShader,
+    getData,
 };

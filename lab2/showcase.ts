@@ -1,5 +1,5 @@
 import { WebGlUtils } from "./webgl-utils.js";
-import { mat4 } from "./gl-matrix/index.js";
+import { mat4, vec3 } from "./gl-matrix/index.js";
 
 
 // let log = console.log;
@@ -15,11 +15,13 @@ const vsSource = `
 
     uniform mat4 uModelViewMatrix;
     uniform mat4 uProjectionMatrix;
+    uniform float uPointSize;
 
     varying lowp vec4 vColor;
 
     void main() {
         gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+        gl_PointSize = uPointSize;
         vColor = aVertexColor;
     }
 `;
@@ -32,50 +34,48 @@ const fsSource = `
     }
 `;
 
-const initBuffers = (gl: WebGLRenderingContext) => {
+const initBuffers = (gl: WebGLRenderingContext, count: number) => {
+    const triangle = [
+        [-1.0, 0.0, 10.0],
+        [ 1.0, 0.0, 10.0],
+        [ 0.0, 5.0, 10.0],
+    ];
 
-    // Create a buffer for the square's positions.
+    const list = [];
+    const rot = 2 * Math.PI / count;
+
+    for (let i = 0; i < count; i++) {
+        list.push(i);
+    }
+
+    const triangles = list.map(i => {
+        return triangle.map(p => [...vec3.rotateY(vec3.create(), p, [0.0, 0.0, 0.0], i * rot)]);
+    });
+
+    const colors = list.map(i => {
+        const color = [Math.cos(i * rot), -Math.cos(i * rot), Math.sin(i * rot), 1.0];
+        return [color, color, color];
+    });
+
+    const vertices = [].concat(...[].concat(...triangles));
+
+    log(triangles, vertices);
 
     const positionBuffer = gl.createBuffer();
-
-    // Select the positionBuffer as the one to apply buffer
-    // operations to from here out.
-
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
 
-    // Now create an array of positions for the square.
-
-    const positions = [
-        -1.0, 1.0,
-        1.0, 1.0,
-        -1.0, -1.0,
-        1.0, -1.0,
-    ];
-
-    // Now pass the list of positions into WebGL to build the
-    // shape. We do this by creating a Float32Array from the
-    // JavaScript array, then use it to fill the current buffer.
-
-    gl.bufferData(gl.ARRAY_BUFFER,
-        new Float32Array(positions),
-        gl.STATIC_DRAW);
-
-    const colors = [
-        1.0, 1.0, 1.0, 1.0,    // white
-        1.0, 0.0, 0.0, 1.0,    // red
-        0.0, 1.0, 0.0, 1.0,    // green
-        0.0, 0.0, 1.0, 1.0,    // blue
-    ];
+    const flattenedColors = [].concat(...[].concat(...colors));
 
     const colorBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(flattenedColors), gl.STATIC_DRAW);
 
     return {
         position: positionBuffer,
         color: colorBuffer,
     };
-};
+}
 
 const drawScene = (gl: WebGLRenderingContext, programInfo, buffers, parameters) => {
     gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
@@ -122,20 +122,27 @@ const drawScene = (gl: WebGLRenderingContext, programInfo, buffers, parameters) 
     mat4.translate(
         modelViewMatrix,    // destination matrix
         modelViewMatrix,    // matrix to translate
-        [-0.0, 0.0, -6.0]   // amount to translate
+        [-0.0, 0.0, -30.0]   // amount to translate
     );
 
     mat4.rotate(
         modelViewMatrix,            // destination matrix
         modelViewMatrix,            // matrix to rotate
-        parameters.squareRotation,  // amount to rotate in radians
+        parameters.rotation,  // amount to rotate in radians
         [0, 0, 1]                   // axis to rotate around
+    );
+
+    mat4.rotate(
+        modelViewMatrix,            // destination matrix
+        modelViewMatrix,            // matrix to rotate
+        parameters.rotation * 2,  // amount to rotate in radians
+        [1, 0, 0]                   // axis to rotate around
     );
 
     // Tell WebGL how to pull out the positions from the position
     // buffer into the vertexPosition attribute.
     {
-        const numComponents = 2;    // pull out 2 values per iteration
+        const numComponents = 3;    // pull out 2 values per iteration
         const type = gl.FLOAT;      // the data in the buffer is 32bit floats
         const normalize = false;    // don't normalize
         const stride = 0;           // how many bytes to get from one set of values to the next
@@ -182,28 +189,33 @@ const drawScene = (gl: WebGLRenderingContext, programInfo, buffers, parameters) 
     gl.uniformMatrix4fv(
         programInfo.uniformLocations.projectionMatrix,
         false,
-        projectionMatrix);
+        projectionMatrix
+    );
+
     gl.uniformMatrix4fv(
         programInfo.uniformLocations.modelViewMatrix,
         false,
-        modelViewMatrix);
+        modelViewMatrix
+    );
+
+    gl.uniform1f(programInfo.uniformLocations.pointSize, 20);
 
     {
         const offset = 0;
-        const vertexCount = 4;
-        gl.drawArrays(gl.TRIANGLE_STRIP, offset, vertexCount);
+        const vertexCount = parameters.count * 3;
+        gl.drawArrays(parameters.mode, offset, vertexCount);
     }
 };
 
 const startAnimation = (gl: WebGLRenderingContext, programInfo, buffers, parameters, update) => {
     let then = null;
-    
+
     // Draw the scene repeatedly
     const render = (now: number) => {
         now *= 0.001;  // convert to seconds
         const deltaTime = now - then;
         then = now;
-        
+
         log(deltaTime);
         const newParameters = update(parameters, deltaTime);
         parameters = newParameters;
@@ -244,23 +256,44 @@ const showcaseMain = () => {
         uniformLocations: {
             projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
             modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
+            pointSize: gl.getUniformLocation(shaderProgram, 'uPointSize'),
         },
     };
 
-    const buffers = initBuffers(gl);
+
+    const count = 10;
+    const buffers = initBuffers(gl, count);
+
+    const modes = [gl.POINTS, gl.LINE_STRIP, gl.LINE_LOOP, gl.LINES, gl.TRIANGLE_STRIP, gl.TRIANGLE_FAN, gl.TRIANGLES];
+    let modeIndex = 0;
+    let elapsed = 0;
 
     const update = (parameters, deltaTime) => {
-        let squareRotation = parameters.squareRotation;
-        squareRotation = (squareRotation + deltaTime) % (2 * Math.PI);
+        let rotation = parameters.rotation;
+        rotation = (rotation + deltaTime / 3) % (2 * Math.PI);
 
-        // log(squareRotation);
+        // log(rotation);
 
-        return { ...parameters, squareRotation };
+        elapsed += deltaTime;
+        if (elapsed > 5)
+        {
+            modeIndex = (modeIndex + 1) % modes.length;
+            parameters = { ...parameters, mode: modes[modeIndex] };
+            elapsed = 0;
+        }
+
+        return { ...parameters, rotation };
     };
+
 
     const initialParameters = {
-        squareRotation: 0.0,
+        rotation: 0.0,
+        count,
+        mode: modes[modeIndex],
     };
+
+    const button = <HTMLButtonElement>document.querySelector("#button");
+    button.onclick = () => console.log(WebGlUtils.getData(gl, shaderProgram));
 
     startAnimation(gl, programInfo, buffers, initialParameters, update);
 };
