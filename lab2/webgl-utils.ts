@@ -15,7 +15,7 @@ const initShaderProgram = (gl: WebGLRenderingContext, vsSource: string, fsSource
     }
 
     return shaderProgram;
-}
+};
 
 const loadShader = (gl: WebGLRenderingContext, type: number, source: string) => {
     const shader = gl.createShader(type);
@@ -31,7 +31,7 @@ const loadShader = (gl: WebGLRenderingContext, type: number, source: string) => 
     }
 
     return shader;
-}
+};
 
 const WebGlUtils = {
     initShaderProgram,

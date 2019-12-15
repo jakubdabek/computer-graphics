@@ -1,5 +1,13 @@
 import { WebGlUtils } from "./webgl-utils.js";
-import { mat4 } from "./gl-matrix/index.js"
+import { mat4 } from "./gl-matrix/index.js";
+
+
+// let log = console.log;
+let logCounter = 0;
+let log = (...args) => {
+    if (++logCounter < 20)
+        console.log(...args);
+};
 
 const vsSource = `
     attribute vec4 aVertexPosition;
@@ -67,7 +75,7 @@ const initBuffers = (gl: WebGLRenderingContext) => {
         position: positionBuffer,
         color: colorBuffer,
     };
-}
+};
 
 const drawScene = (gl: WebGLRenderingContext, programInfo, buffers, parameters) => {
     gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
@@ -185,7 +193,28 @@ const drawScene = (gl: WebGLRenderingContext, programInfo, buffers, parameters) 
         const vertexCount = 4;
         gl.drawArrays(gl.TRIANGLE_STRIP, offset, vertexCount);
     }
-}
+};
+
+const startAnimation = (gl: WebGLRenderingContext, programInfo, buffers, parameters, update) => {
+    let then = null;
+    
+    // Draw the scene repeatedly
+    const render = (now: number) => {
+        now *= 0.001;  // convert to seconds
+        const deltaTime = now - then;
+        then = now;
+        
+        log(deltaTime);
+        const newParameters = update(parameters, deltaTime);
+        parameters = newParameters;
+
+        drawScene(gl, programInfo, buffers, parameters);
+
+        requestAnimationFrame(render);
+    };
+
+    requestAnimationFrame(now => { then = now / 1000; render(now); });
+};
 
 const showcaseMain = () => {
     const canvas = <HTMLCanvasElement>document.querySelector("#glCanvas");
@@ -215,23 +244,20 @@ const showcaseMain = () => {
 
     const buffers = initBuffers(gl);
 
-    // drawScene(gl, programInfo, buffers);
-
-    let then = 0;
-    let squareRotation = 0.0;
-
-    // Draw the scene repeatedly
-    const render = (now: number) => {
-        now *= 0.001;  // convert to seconds
-        const deltaTime = now - then;
-        then = now;
+    const update = (parameters, deltaTime) => {
+        let squareRotation = parameters.squareRotation;
         squareRotation = (squareRotation + deltaTime) % (2 * Math.PI);
 
-        drawScene(gl, programInfo, buffers, { squareRotation });
+        // log(squareRotation);
 
-        requestAnimationFrame(render);
-    }
-    requestAnimationFrame(render);
+        return { ...parameters, squareRotation };
+    };
+
+    const initialParameters = {
+        squareRotation: 0.0,
+    };
+
+    startAnimation(gl, programInfo, buffers, initialParameters, update);
 };
 
 
