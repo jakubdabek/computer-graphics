@@ -1,15 +1,17 @@
-export { WebGlUtils };
+import { mat4 } from "./gl-matrix/index.js";
+
+export { WebGLUtils };
 
 const initShaderProgram = (
     gl: WebGLRenderingContext,
     vsSource: string,
     fsSource: string,
-    bindAttribLocations: (program: WebGLProgram) => void = null
+    bindAttribLocations: ((program: WebGLProgram) => void) | null = null
 ) => {
-    const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
-    const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+    const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource)!;
+    const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource)!;
 
-    const shaderProgram = gl.createProgram();
+    const shaderProgram = gl.createProgram()!;
     gl.attachShader(shaderProgram, vertexShader);
     gl.attachShader(shaderProgram, fragmentShader);
 
@@ -27,7 +29,7 @@ const initShaderProgram = (
 };
 
 const loadShader = (gl: WebGLRenderingContext, type: number, source: string) => {
-    const shader = gl.createShader(type);
+    const shader = gl.createShader(type)!;
 
     gl.shaderSource(shader, source);
 
@@ -44,16 +46,16 @@ const loadShader = (gl: WebGLRenderingContext, type: number, source: string) => 
 
 const getData = (gl: WebGLRenderingContext, program: WebGLProgram) => {
     const numAttribs = gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES);
-    const attribs = [];
+    const attribs: WebGLActiveInfo[] = [];
     for (let i = 0; i < numAttribs; ++i) {
-        const info = gl.getActiveAttrib(program, i);
+        const info = gl.getActiveAttrib(program, i)!;
         attribs.push(info);
     }
 
     const numUniforms = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
-    const uniforms = [];
+    const uniforms: WebGLActiveInfo[] = [];
     for (let i = 0; i < numUniforms; ++i) {
-        const info = gl.getActiveUniform(program, i);
+        const info = gl.getActiveUniform(program, i)!;
         uniforms.push(info);
     }
 
@@ -63,8 +65,29 @@ const getData = (gl: WebGLRenderingContext, program: WebGLProgram) => {
     };
 };
 
-const WebGlUtils = {
+const getDefaultPerspective = (gl: WebGLRenderingContext) => {
+    const canvas = <HTMLCanvasElement>gl.canvas;
+
+    const fieldOfView = 45 * Math.PI / 180;   // in radians
+    const aspect = canvas.clientWidth / canvas.clientHeight;
+    const zNear = 0.1;
+    const zFar = 100.0;
+    const projectionMatrix = mat4.create();
+
+    mat4.perspective(
+        projectionMatrix,
+        fieldOfView,
+        aspect,
+        zNear,
+        zFar
+    );
+
+    return projectionMatrix;
+};
+
+const WebGLUtils = {
     initShaderProgram,
     loadShader,
     getData,
+    getDefaultPerspective,
 };

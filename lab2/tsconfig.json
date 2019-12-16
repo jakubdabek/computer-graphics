@@ -1,8 +1,12 @@
 {
     "compilerOptions": {
-      "target": "es6",
-      "module": "es6",
-      "lib": ["dom","es6"],
-      "outDir": "js",
+        "target": "es6",
+        "module": "es6",
+        "lib": [
+            "dom",
+            "es6"
+        ],
+        "outDir": "js",
+        "strictNullChecks": true,
     }
-  }
+}

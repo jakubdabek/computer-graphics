@@ -1,4 +1,4 @@
-import { WebGlUtils } from "./webgl-utils.js";
+import { WebGLUtils } from "./webgl-utils.js";
 import { mat4, vec3 } from "./gl-matrix/index.js";
 
 // let log = console.log;
@@ -38,7 +38,7 @@ const hilbert = (width: number, spacing: number, points: number[]) => (x, y, lg,
         const px = (width - x) * spacing;
         const py = (width - y) * spacing;
         points.push(px, py);
-        return;
+        return points;
     }
     lg >>= 1;
     f(x + i1 * lg, y + i1 * lg, lg, i1, 1 - i2, f);
@@ -72,7 +72,7 @@ const getHilbertBuffer = (gl: WebGLRenderingContext, order: number) => {
 };
 
 const initBuffers = (gl: WebGLRenderingContext, order: number) => {
-    const list = [];
+    const list: number[] = [];
     const rot = 2 * Math.PI / order;
 
     for (let i = 1; i <= order; i++) {
@@ -87,30 +87,10 @@ const initBuffers = (gl: WebGLRenderingContext, order: number) => {
     });
 
     return buffers;
-}
-
-const getPerspective = (gl: WebGLRenderingContext) => {
-    const canvas = <HTMLCanvasElement>gl.canvas;
-
-    const fieldOfView = 45 * Math.PI / 180;   // in radians
-    const aspect = canvas.clientWidth / canvas.clientHeight;
-    const zNear = 0.1;
-    const zFar = 100.0;
-    const projectionMatrix = mat4.create();
-
-    mat4.perspective(
-        projectionMatrix,
-        fieldOfView,
-        aspect,
-        zNear,
-        zFar
-    );
-
-    return projectionMatrix;
 };
 
 const drawHilbert = (gl: WebGLRenderingContext, programInfo, buffer, modelViewMatrix) => {
-    const projectionMatrix = getPerspective(gl);
+    const projectionMatrix = WebGLUtils.getDefaultPerspective(gl);
 
     const numComponents = 2;
     const type = gl.FLOAT;
@@ -208,7 +188,7 @@ const drawScene = (gl: WebGLRenderingContext, programInfo, buffers, parameters) 
 };
 
 const startAnimation = (gl: WebGLRenderingContext, programInfo, buffers, parameters, update) => {
-    let then = null;
+    let then: number = 0;
 
     // Draw the scene repeatedly
     const render = (now: number) => {
@@ -283,10 +263,10 @@ const hilbertMain = () => {
         vertexColor: 1,
     }
 
-    const shaderProgram = WebGlUtils.initShaderProgram(gl, vsSource, fsSource, program => {
+    const shaderProgram = WebGLUtils.initShaderProgram(gl, vsSource, fsSource, program => {
         gl.bindAttribLocation(program, attribLocations.vertexPosition, 'aVertexPosition');
         gl.bindAttribLocation(program, attribLocations.vertexColor, 'aVertexColor');
-    });
+    })!;
 
     const programInfo = {
         program: shaderProgram,

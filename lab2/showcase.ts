@@ -1,4 +1,4 @@
-import { WebGlUtils } from "./webgl-utils.js";
+import { WebGLUtils } from "./webgl-utils.js";
 import { mat4, vec3 } from "./gl-matrix/index.js";
 
 
@@ -41,7 +41,7 @@ const initBuffers = (gl: WebGLRenderingContext, count: number) => {
         [ 0.0, 5.0, 10.0],
     ];
 
-    const list = [];
+    const list: number[] = [];
     const rot = 2 * Math.PI / count;
 
     for (let i = 0; i < count; i++) {
@@ -57,7 +57,7 @@ const initBuffers = (gl: WebGLRenderingContext, count: number) => {
         return [color, color, color];
     });
 
-    const vertices = [].concat(...[].concat(...triangles));
+    const vertices = [].concat(...([] as any[]).concat(...triangles));
 
     log(triangles, vertices);
 
@@ -65,7 +65,7 @@ const initBuffers = (gl: WebGLRenderingContext, count: number) => {
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
 
-    const flattenedColors = [].concat(...[].concat(...colors));
+    const flattenedColors = [].concat(...([] as any[]).concat(...colors));
 
     const colorBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
@@ -208,7 +208,7 @@ const drawScene = (gl: WebGLRenderingContext, programInfo, buffers, parameters) 
 };
 
 const startAnimation = (gl: WebGLRenderingContext, programInfo, buffers, parameters, update) => {
-    let then = null;
+    let then = 0;
 
     // Draw the scene repeatedly
     const render = (now: number) => {
@@ -245,10 +245,10 @@ const showcaseMain = () => {
         vertexColor: 1,
     }
 
-    const shaderProgram = WebGlUtils.initShaderProgram(gl, vsSource, fsSource, program => {
+    const shaderProgram = WebGLUtils.initShaderProgram(gl, vsSource, fsSource, program => {
         gl.bindAttribLocation(program, attribLocations.vertexPosition, 'aVertexPosition');
         gl.bindAttribLocation(program, attribLocations.vertexColor, 'aVertexColor');
-    });
+    })!;
 
     const programInfo = {
         program: shaderProgram,
@@ -293,7 +293,7 @@ const showcaseMain = () => {
     };
 
     const button = <HTMLButtonElement>document.querySelector("#button");
-    button.onclick = () => console.log(WebGlUtils.getData(gl, shaderProgram));
+    button.onclick = () => console.log(WebGLUtils.getData(gl, shaderProgram));
 
     startAnimation(gl, programInfo, buffers, initialParameters, update);
 };
