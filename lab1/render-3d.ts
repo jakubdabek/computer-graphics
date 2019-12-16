@@ -25,9 +25,9 @@ class Vec3D {
     public sub(other: Vec3D): Vec3D { return vec3(this.x - other.x, this.y - other.y, this.z - other.z); }
     public mul(other: Vec3D): Vec3D { return vec3(this.x * other.x, this.y * other.y, this.z * other.z); }
     public mulScalar(other: number): Vec3D { return vec3(this.x * other, this.y * other, this.z * other); }
-    
+
     public toString() { return `(${this.x}, ${this.y}, ${this.z})`}
-    
+
     public static get zero() { return new Vec3D(0, 0, 0) };
 }
 
@@ -38,7 +38,7 @@ class Rotation {
     public get x() { return this.pitch; }
     public get y() { return this.yaw; }
     public get z() { return this.roll; }
-    
+
     public add(other: Rotation): Rotation { return rot(this.x + other.x, this.y + other.y, this.z + other.z); }
     public sub(other: Rotation): Rotation { return rot(this.x - other.x, this.y - other.y, this.z - other.z); }
     public mul(other: Rotation): Rotation { return rot(this.x * other.x, this.y * other.y, this.z * other.z); }
@@ -253,7 +253,7 @@ class DrawingContext3D {
 
     public drawLine(line: [Vec3D, Vec3D]) {
         const [begin, end] = line;
-            
+
         console.log(`Drawing line: ${begin} -> ${end}`);
 
         const beginRel = this.camera.getRelativePoint(begin);

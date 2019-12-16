@@ -25,10 +25,10 @@ class GameState {
 
         if (insideAny)
             return State.Loss;
-        
+
         if (this.winningShape.isInside(currentPosition))
             return State.Win;
-        
+
         return State.Normal;
     }
 
@@ -96,11 +96,11 @@ class GameState {
 const canvas = <HTMLCanvasElement> document.getElementById("main");
 const context = canvas.getContext("2d");
 
-const obstaclesNum = rand(3, 10);
+const obstaclesNum = rand(5, 30);
 
 const obstacles: Shape[] = [];
 for (let i = 0; i < obstaclesNum; i++) {
-    const pos = vec3(rand(-50, 50), rand(-50, 50), rand(-50, 50));
+    const pos = vec3(rand(-100, 100), rand(-100, 100), rand(-100, 100));
     const size = vec3(rand(10, 50), rand(10, 50), rand(10, 50));
 
     obstacles.push(new Box(pos, size));
@@ -109,16 +109,14 @@ for (let i = 0; i < obstaclesNum; i++) {
 let winningShape: Shape;
 
 while (true) {
-    const pos = vec3(rand(-50, 50), rand(-50, 50), rand(-50, 50));
+    const pos = vec3(rand(-80, 80), rand(-80, 80), rand(-80, 80));
     const size = vec3(15, 15, 15);
     const other = pos.add(size);
-
-    const points = [pos.x, pos.y, pos.z, other.x, other.y, other.z];
 
     const anyInObstacles = obstacles
         .map(s => s.isInside(pos) || s.isInside(other))
         .reduce((prev, curr) => prev || curr, false);
-    
+
     if (!anyInObstacles) {
         winningShape = new Box(pos, size);
         break;

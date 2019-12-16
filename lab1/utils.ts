@@ -2,7 +2,7 @@ export { updateProperty, rand };
 
 const updateProperty = (obj: any, path: string) => {
     const pathSegments = path.split('.');
-    
+
     return (value?: any | undefined, transform?: (x: any) => any) => {
         const {o:innerObject, trail} = pathSegments.slice(0, -1).reduce(
             ({o, trail}, prop) => { return {o: o[prop], trail: trail.concat(o)}; },
