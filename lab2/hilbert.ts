@@ -156,14 +156,14 @@ const drawScene = (gl: WebGLRenderingContext, programInfo, buffers, parameters) 
             modelViewMatrix,
             [0.0, 0.0, centerZ]
         );
-        
+
         mat4.rotate(
             modelViewMatrix,            // destination matrix
             modelViewMatrix,            // matrix to rotate
             parameters.rotationY,  // amount to rotate in radians
             [0, 1, 0]                   // axis to rotate around
         );
-            
+
         mat4.translate(
             modelViewMatrix,
             modelViewMatrix,
@@ -286,7 +286,7 @@ const hilbertMain = () => {
 
     const update = (parameters, deltaTime) => {
         let { rotationZ, rotationY, deltaDepth } = parameters;
-        
+
         rotationZ = (rotationZ + deltaTime / 3) % (2 * Math.PI);
         rotationY = (rotationY + deltaTime * deltaYRot) % (2 * Math.PI);
         deltaDepth += deltaDeltaDepth * deltaTime;
