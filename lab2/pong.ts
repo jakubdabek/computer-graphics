@@ -128,7 +128,6 @@ abstract class PlaneShape {
     }
 
     protected setupTexture(gl: WebGLRenderingContext, programInfo: ProgramInfo) {
-        log(this.textureCoordBuffer, this.textureBuffer);
         if (!this.textureCoordBuffer || !this.textureBuffer)
             return;
 
@@ -235,8 +234,10 @@ class BallBuffer {
 };
 
 class Ball extends PlaneShape {
-    position: Point2D = { x: 0, y: 0 };
-    velocity: Point2D = { x: 0, y: 0 };
+    public position: Point2D = { x: 0, y: 0 };
+    public velocity: Point2D = { x: 0, y: 0 };
+    public rotation: number = 0;
+    public rotationDir: number = 1;
 
     constructor(private readonly ballBuffer: BallBuffer) { super(); }
 
@@ -248,7 +249,10 @@ class Ball extends PlaneShape {
     public get radius() { return this.ballBuffer.radius; }
 
     private getModelViewMatrix() {
-        return mat4.fromTranslation(mat4.create(), [this.position.x, this.position.y, -36.0]);
+        const mat = mat4.fromTranslation(mat4.create(), [this.position.x, this.position.y, -36.0]);
+        mat4.rotateZ(mat, mat, this.rotation);
+
+        return mat;
     }
 
     public render(gl: WebGLRenderingContext, programInfo: ProgramInfo) {
@@ -656,6 +660,7 @@ const pongMain = (useTexture: boolean) => {
     };
 
     let framesInsidePaddle = 0;
+    let lastInside = 'none';
 
     const fixedUpdate = (deltaTime) => {
         const leftPaddle = objects.paddles[0];
@@ -675,13 +680,22 @@ const pongMain = (useTexture: boolean) => {
             ball.velocity.y = -ball.velocity.y;
         }
 
-        if (framesInsidePaddle == 0) {
-            if (leftPaddle.contains(ball.position) || rightPaddle.contains(ball.position)) {
+        const leftContains = leftPaddle.contains(ball.position);
+        const rightContains = rightPaddle.contains(ball.position);
+        if (framesInsidePaddle == 0 || (lastInside == 'right' && leftContains) || (lastInside == 'left' && rightContains)) {
+            if (leftContains || rightContains) {
                 ball.velocity.x = -ball.velocity.x;
+                ball.rotationDir = -ball.rotationDir;
                 framesInsidePaddle++;
             }
+
+            if (leftContains)
+                lastInside = 'left';
+            if (rightContains)
+                lastInside = 'right';
         } else if (++framesInsidePaddle > 120) {
             framesInsidePaddle = 0;
+            lastInside = 'none';
         }
 
         ball.position.x += ball.velocity.x;
@@ -692,6 +706,8 @@ const pongMain = (useTexture: boolean) => {
     let remainingDeltaTime = 0;
 
     const update = (parameters, deltaTime) => {
+        objects.ball.rotation += deltaTime * 2 * objects.ball.rotationDir;
+
         deltaTime += remainingDeltaTime;
 
         for ( ; deltaTime > fixedUpdateDeltaTime; deltaTime -= fixedUpdateDeltaTime) {
@@ -709,6 +725,7 @@ const pongMain = (useTexture: boolean) => {
             const velocityY = Math.sqrt(velocity * velocity - velocityX * velocityX) * Math.sign(Math.random() - 0.5);
 
             objects.ball.velocity = { x: velocityX, y: velocityY };
+            objects.ball.rotationDir = Math.sign(velocityX);
 
             resetStage = false;
         }
