@@ -4,7 +4,7 @@ import { mat4, vec3 } from "./gl-matrix/index.js";
 // let log = console.log;
 let logCounter = 0;
 let log = (...args) => {
-    if (++logCounter < 20)
+    if (++logCounter < 40)
         console.log(...args);
 };
 
@@ -42,6 +42,8 @@ type ProgramInfo = {
         modelViewMatrix: WebGLUniformLocation;
     };
 };
+
+type Point2D = { x: number, y: number };
 
 abstract class PlaneShape {
     protected abstract get positionBuffer(): WebGLBuffer;
@@ -143,8 +145,8 @@ class BallBuffer {
 };
 
 class Ball extends PlaneShape {
-    position: { x: number, y: number } = { x: 0, y: 0 };
-    velocity: { x: number, y: number } = { x: 0, y: 0 };
+    position: Point2D = { x: 0, y: 0 };
+    velocity: Point2D = { x: 0, y: 0 };
 
     constructor(private readonly ballBuffer: BallBuffer) { super(); }
 
@@ -210,11 +212,11 @@ class PaddleBuffer {
 };
 
 class Paddle extends PlaneShape {
-    public velocity: { x: number, y: number } = { x: 0, y: 0 };
+    public velocity: Point2D = { x: 0, y: 0 };
 
     constructor(
         private readonly paddleBuffer: PaddleBuffer,
-        public position: { x: number, y: number } = { x: 0, y: 0 }
+        public position: Point2D = { x: 0, y: 0 }
     ) { super(); }
 
     protected get positionBuffer() { return this.paddleBuffer.positionBuffer; }
@@ -238,6 +240,16 @@ class Paddle extends PlaneShape {
             const offset = 0;
             gl.drawArrays(gl.TRIANGLE_FAN, offset, this.paddleBuffer.vertexCount);
         }
+    }
+
+    public contains(point: Point2D) {
+        const left = this.position.x - this.paddleBuffer.width / 2;
+        const right = left + this.paddleBuffer.width;
+        
+        const bottom = this.position.y - this.paddleBuffer.height / 2;
+        const top = bottom + this.paddleBuffer.height;
+
+        return point.x < right && point.x > left && point.y > bottom && point.y < top;
     }
 };
 
@@ -283,8 +295,12 @@ class BackgroundBuffer {
 
 class Background extends PlaneShape {
     constructor(private readonly backgroundBuffer: BackgroundBuffer) { super(); }
+
     protected get positionBuffer() { return this.backgroundBuffer.positionBuffer; }
     protected get colorBuffer() { return this.backgroundBuffer.colorBuffer; }
+
+    public get width() { return this.backgroundBuffer.width; }
+    public get height() { return this.backgroundBuffer.height; }
 
     private getModelViewMatrix() {
         return mat4.fromTranslation(mat4.create(), [-this.backgroundBuffer.width / 2, -this.backgroundBuffer.height / 2, -48.0]);
@@ -316,7 +332,7 @@ const initObjects = (gl: WebGLRenderingContext): ObjectStore => {
     const ballBuffer = new BallBuffer(gl, 1);
     const ball = ballBuffer.createBall();
 
-    const backgroundBuffer = new BackgroundBuffer(gl, 30, 48);
+    const backgroundBuffer = new BackgroundBuffer(gl, 25, 48);
     const background = backgroundBuffer.createBackground();
 
     return {
@@ -348,7 +364,6 @@ const startAnimation = (gl: WebGLRenderingContext, programInfo: ProgramInfo, buf
         const deltaTime = now - then;
         then = now;
 
-        log(deltaTime);
         const newParameters = update(parameters, deltaTime);
         parameters = newParameters;
 
@@ -363,6 +378,7 @@ const startAnimation = (gl: WebGLRenderingContext, programInfo: ProgramInfo, buf
 enum Op {
     Set,
     Reset,
+    Special,
 };
 
 enum Movement {
@@ -386,6 +402,9 @@ const onKeyDown = (event: KeyboardEvent, callback) => {
         break;
     case "s":
         callback(Op.Set, Movement.Down, undefined);
+        break;
+    case "Enter":
+        callback(Op.Special);
         break;
     }
 };
@@ -443,22 +462,74 @@ const pongMain = () => {
     const objects = initObjects(gl);
 
     let leftPaddleMovement = Movement.Neutral, rightPaddleMovement = Movement.Neutral;
+    let resetStage = false;
 
     const getDelta = (movement: Movement) => {
         let delta = 0.0;
 
         if (movement & Movement.Down)
-            delta += -40;
+            delta += -20;
 
         if (movement & Movement.Up)
-            delta += 40;
+            delta += 20;
 
         return delta;
     };
 
+    let framesInsidePaddle = 0;
+
+    const fixedUpdate = (deltaTime) => {
+        const leftPaddle = objects.paddles[0];
+        const rightPaddle = objects.paddles[1];
+        const ball = objects.ball;
+        const background = objects.background;
+
+        leftPaddle.position.y += getDelta(leftPaddleMovement) * deltaTime;
+        rightPaddle.position.y += getDelta(rightPaddleMovement) * deltaTime;
+
+        if (Math.abs(ball.position.y) > (background.height / 2)) {
+            ball.position.y = background.height / 2 * Math.sign(ball.position.y);
+            ball.velocity.y = -ball.velocity.y;
+        }
+        
+        if (framesInsidePaddle == 0) {
+            log(leftPaddle, rightPaddle, ball);
+            if (leftPaddle.contains(ball.position) || rightPaddle.contains(ball.position)) {
+                ball.velocity.x = -ball.velocity.x;
+                framesInsidePaddle++;
+            }
+        } else if (++framesInsidePaddle > 120) {
+            framesInsidePaddle = 0;
+        }
+
+        ball.position.x += ball.velocity.x;
+        ball.position.y += ball.velocity.y;
+    };
+
+    const fixedUpdateDeltaTime = 1.0/120.0;
+    let remainingDeltaTime = 0;
+
     const update = (parameters, deltaTime) => {
-        objects.paddles[0].position.y += getDelta(leftPaddleMovement) * deltaTime;
-        objects.paddles[1].position.y += getDelta(rightPaddleMovement) * deltaTime;
+        deltaTime += remainingDeltaTime;
+
+        for ( ; deltaTime > fixedUpdateDeltaTime; deltaTime -= fixedUpdateDeltaTime) {
+            fixedUpdate(fixedUpdateDeltaTime);
+        }
+
+        remainingDeltaTime = deltaTime;
+
+        if (resetStage) {
+            objects.paddles.forEach(paddle => paddle.position.y = 0);
+            objects.ball.position = { x: 0, y: 0 };
+
+            const velocity = 0.1;
+            const velocityX = velocity * (0.4 + Math.random() * 0.6) * Math.sign(Math.random() - 0.5);
+            const velocityY = Math.sqrt(velocity * velocity - velocityX * velocityX) * Math.sign(Math.random() - 0.5);
+
+            objects.ball.velocity = { x: velocityX, y: velocityY };
+
+            resetStage = false;
+        }
 
         return { ...parameters };
     };
@@ -476,6 +547,8 @@ const pongMain = () => {
             leftPaddleMovement &= ~(leftPaddleUpdate ?? Movement.Neutral);
             rightPaddleMovement &= ~(rightPaddleUpdate ?? Movement.Neutral);
             break;
+        case Op.Special:
+            resetStage = true;
         }
     }
 
