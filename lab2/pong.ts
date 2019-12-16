@@ -8,46 +8,85 @@ let log = (...args) => {
         console.log(...args);
 };
 
-const vsSource = `
-    attribute vec4 aVertexPosition;
-    attribute vec4 aVertexColor;
+const getShaderSource = (useTexture: boolean) => {
+    let shaderSourceVariables: {
+        attribute: string;
+        varying: string;
+        assignment: string;
+        additionalFragmentVariables: string;
+        fragmentColorValue: string;
+    };
 
-    uniform mat4 uModelViewMatrix;
-    uniform mat4 uProjectionMatrix;
-
-    varying lowp vec4 vColor;
-
-    void main() {
-        gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
-        vColor = aVertexColor;
+    if (useTexture) {
+        shaderSourceVariables = {
+            attribute: 'vec2 aTextureCoord',
+            varying: 'highp vec2 vTextureCoord',
+            assignment: 'vTextureCoord = aTextureCoord',
+            additionalFragmentVariables: 'uniform sampler2D uSampler;',
+            fragmentColorValue: 'texture2D(uSampler, vTextureCoord)',
+        }
+    } else {
+        shaderSourceVariables = {
+            attribute: 'vec4 aVertexColor',
+            varying: 'lowp vec4 vColor',
+            assignment: 'vColor = aVertexColor',
+            additionalFragmentVariables: '',
+            fragmentColorValue: 'vColor',
+        }
     }
-`;
 
-const fsSource = `
-    varying lowp vec4 vColor;
+    const vsSource = `
+        attribute vec4 aVertexPosition;
+        attribute ${shaderSourceVariables.attribute};
 
-    void main(void) {
-        gl_FragColor = vColor;
-    }
-`;
+        uniform mat4 uModelViewMatrix;
+        uniform mat4 uProjectionMatrix;
+
+        varying ${shaderSourceVariables.varying};
+
+        void main() {
+            gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+            ${shaderSourceVariables.assignment};
+        }
+    `;
+
+    const fsSource = `
+        varying ${shaderSourceVariables.varying};
+
+        ${shaderSourceVariables.additionalFragmentVariables}
+
+        void main(void) {
+            gl_FragColor = ${shaderSourceVariables.fragmentColorValue};
+        }
+    `;
+
+    return {
+        vsSource,
+        fsSource,
+    };
+};
 
 type ProgramInfo = {
-    program: WebGLProgram;
+    program: WebGLProgram
     attribLocations: {
-        vertexPosition: number;
-        vertexColor: number;
-    };
+        vertexPosition: number
+        vertexColor?: number
+        vertexTextureCoord?: number
+    }
     uniformLocations: {
-        projectionMatrix: WebGLUniformLocation;
-        modelViewMatrix: WebGLUniformLocation;
-    };
+        projectionMatrix: WebGLUniformLocation
+        modelViewMatrix: WebGLUniformLocation
+        sampler?: WebGLUniformLocation
+    }
 };
 
 type Point2D = { x: number, y: number };
 
 abstract class PlaneShape {
     protected abstract get positionBuffer(): WebGLBuffer;
-    protected abstract get colorBuffer(): WebGLBuffer;
+    protected abstract get colorBuffer(): WebGLBuffer | null;
+    protected abstract get textureCoordBuffer(): WebGLBuffer | null;
+    protected abstract get textureBuffer(): WebGLTexture | null;
 
     protected setupPositionBuffer(gl: WebGLRenderingContext, programInfo: ProgramInfo) {
         const numComponents = 2;
@@ -68,6 +107,9 @@ abstract class PlaneShape {
     }
 
     protected setupColorBuffer(gl: WebGLRenderingContext, programInfo: ProgramInfo) {
+        if (!this.colorBuffer)
+            return;
+
         const numComponents = 4;
         const type = gl.FLOAT;
         const normalize = false;
@@ -75,20 +117,53 @@ abstract class PlaneShape {
         const offset = 0;
         gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer);
         gl.vertexAttribPointer(
-            programInfo.attribLocations.vertexColor,
+            programInfo.attribLocations.vertexColor!,
             numComponents,
             type,
             normalize,
             stride,
             offset
         );
-        gl.enableVertexAttribArray(programInfo.attribLocations.vertexColor);
+        gl.enableVertexAttribArray(programInfo.attribLocations.vertexColor!);
+    }
+
+    protected setupTexture(gl: WebGLRenderingContext, programInfo: ProgramInfo) {
+        log(this.textureCoordBuffer, this.textureBuffer);
+        if (!this.textureCoordBuffer || !this.textureBuffer)
+            return;
+
+        const numComponents = 2; // every coordinate composed of 2 values
+        const type = gl.FLOAT; // the data in the buffer is 32 bit float
+        const normalize = false; // don't normalize
+        const stride = 0; // how many bytes to get from one set to the next
+        const offset = 0; // how many bytes inside the buffer to start from
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.textureCoordBuffer);
+        gl.vertexAttribPointer(
+            programInfo.attribLocations.vertexTextureCoord!,
+            numComponents,
+            type,
+            normalize,
+            stride,
+            offset
+        );
+        gl.enableVertexAttribArray(programInfo.attribLocations.vertexTextureCoord!);
+
+        // Tell WebGL we want to affect texture unit 0
+        gl.activeTexture(gl.TEXTURE0);
+
+        // Bind the texture to texture unit 0
+        gl.bindTexture(gl.TEXTURE_2D, this.textureBuffer);
+
+        // Tell the shader we bound the texture to texture unit 0
+        gl.uniform1i(programInfo.uniformLocations.sampler!, 0);
     }
 
     protected setupProgram(gl: WebGLRenderingContext, programInfo: ProgramInfo, projectionMatrix: mat4, modelViewMatrix: mat4) {
         this.setupPositionBuffer(gl, programInfo);
 
         this.setupColorBuffer(gl, programInfo);
+        this.setupTexture(gl, programInfo);
 
         gl.useProgram(programInfo.program);
 
@@ -109,9 +184,12 @@ abstract class PlaneShape {
 class BallBuffer {
     vertexCount: number;
     positionBuffer: WebGLBuffer;
-    colorBuffer: WebGLBuffer;
+    colorBuffer: WebGLBuffer | null;
+    textureCoordBuffer: WebGLBuffer | null;
+    textureBuffer: WebGLTexture | null;
+    textureSource = './ball.jpg';
 
-    constructor(gl: WebGLRenderingContext, public readonly radius: number) {
+    constructor(gl: WebGLRenderingContext, public readonly radius: number, useTexture: boolean) {
         const count = 64;
         const angle = 2 * Math.PI / count;
         const points: number[] = [];
@@ -132,11 +210,23 @@ class BallBuffer {
 
         this.positionBuffer = positionBuffer;
 
-        const colorBuffer = gl.createBuffer()!;
-        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+        if (useTexture) {
+            const unitPoints = points.map(p => p / radius / 2 + 0.5);
 
-        this.colorBuffer = colorBuffer;
+            const textureCoordBuffer = gl.createBuffer()!;
+            gl.bindBuffer(gl.ARRAY_BUFFER, textureCoordBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(unitPoints), gl.STATIC_DRAW);
+
+            this.textureCoordBuffer = textureCoordBuffer;
+
+            this.textureBuffer = WebGLUtils.loadTexture(gl, this.textureSource)!;
+        } else {
+            const colorBuffer = gl.createBuffer()!;
+            gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+
+            this.colorBuffer = colorBuffer;
+        }
     }
 
     createBall(): Ball {
@@ -152,6 +242,9 @@ class Ball extends PlaneShape {
 
     protected get positionBuffer() { return this.ballBuffer.positionBuffer; }
     protected get colorBuffer() { return this.ballBuffer.colorBuffer; }
+    protected get textureCoordBuffer() { return this.ballBuffer.textureCoordBuffer; }
+    protected get textureBuffer() { return this.ballBuffer.textureBuffer; }
+
     public get radius() { return this.ballBuffer.radius; }
 
     private getModelViewMatrix() {
@@ -174,9 +267,12 @@ class Ball extends PlaneShape {
 class PaddleBuffer {
     vertexCount: number;
     positionBuffer: WebGLBuffer;
-    colorBuffer: WebGLBuffer;
+    colorBuffer: WebGLBuffer | null;
+    textureCoordBuffer: WebGLBuffer | null;
+    textureBuffer: WebGLTexture | null;
+    textureSource = "./wall.jpg";
 
-    constructor(gl: WebGLRenderingContext, public readonly height: number, public readonly width: number) {
+    constructor(gl: WebGLRenderingContext, public readonly height: number, public readonly width: number, useTexture: boolean) {
         const points = [
             0.0, 0.0,
             width, 0.0,
@@ -192,18 +288,35 @@ class PaddleBuffer {
 
         this.positionBuffer = positionBuffer;
 
-        const colors = [
-            1.0, 1.0, 1.0, 1.0,
-            1.0, 1.0, 1.0, 1.0,
-            1.0, 1.0, 1.0, 1.0,
-            1.0, 1.0, 1.0, 1.0,
-        ];
+        if (useTexture) {
+            const textureCoords = [
+                0.0, 0.0,
+                1.0, 0.0,
+                1.0, 1.0,
+                0.0, 1.0,
+            ];
 
-        const colorBuffer = gl.createBuffer()!;
-        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+            const textureCoordBuffer = gl.createBuffer()!;
+            gl.bindBuffer(gl.ARRAY_BUFFER, textureCoordBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
 
-        this.colorBuffer = colorBuffer;
+            this.textureCoordBuffer = textureCoordBuffer;
+
+            this.textureBuffer = WebGLUtils.loadTexture(gl, this.textureSource)!;
+        } else {
+            const colors = [
+                1.0, 1.0, 1.0, 1.0,
+                1.0, 1.0, 1.0, 1.0,
+                1.0, 1.0, 1.0, 1.0,
+                1.0, 1.0, 1.0, 1.0,
+            ];
+
+            const colorBuffer = gl.createBuffer()!;
+            gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+
+            this.colorBuffer = colorBuffer;
+        }
     }
 
     createPaddle(x: number, y: number): Paddle {
@@ -221,6 +334,8 @@ class Paddle extends PlaneShape {
 
     protected get positionBuffer() { return this.paddleBuffer.positionBuffer; }
     protected get colorBuffer() { return this.paddleBuffer.colorBuffer; }
+    protected get textureCoordBuffer() { return this.paddleBuffer.textureCoordBuffer; }
+    protected get textureBuffer() { return this.paddleBuffer.textureBuffer; }
 
     private getModelViewMatrix() {
         return mat4.fromTranslation(mat4.create(), [
@@ -245,7 +360,7 @@ class Paddle extends PlaneShape {
     public contains(point: Point2D) {
         const left = this.position.x - this.paddleBuffer.width / 2;
         const right = left + this.paddleBuffer.width;
-        
+
         const bottom = this.position.y - this.paddleBuffer.height / 2;
         const top = bottom + this.paddleBuffer.height;
 
@@ -256,9 +371,12 @@ class Paddle extends PlaneShape {
 class BackgroundBuffer {
     vertexCount: number;
     positionBuffer: WebGLBuffer;
-    colorBuffer: WebGLBuffer;
+    colorBuffer: WebGLBuffer | null;
+    textureCoordBuffer: WebGLBuffer | null;
+    textureBuffer: WebGLTexture | null;
+    textureSource = "./football.jpg";
 
-    constructor(gl: WebGLRenderingContext, public readonly height: number, public readonly width: number) {
+    constructor(gl: WebGLRenderingContext, public readonly height: number, public readonly width: number, useTexture: boolean) {
         const points = [
             0.0, 0.0,
             width, 0.0,
@@ -274,18 +392,35 @@ class BackgroundBuffer {
 
         this.positionBuffer = positionBuffer;
 
-        const colors = [
-            0.0, 1.0, 0.2, 1.0,
-            0.0, 1.0, 0.2, 1.0,
-            0.0, 1.0, 0.2, 1.0,
-            0.0, 1.0, 0.2, 1.0,
-        ];
+        if (useTexture) {
+            const textureCoords = [
+                0.0, 0.0,
+                1.0, 0.0,
+                1.0, 1.0,
+                0.0, 1.0,
+            ];
 
-        const colorBuffer = gl.createBuffer()!;
-        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+            const textureCoordBuffer = gl.createBuffer()!;
+            gl.bindBuffer(gl.ARRAY_BUFFER, textureCoordBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
 
-        this.colorBuffer = colorBuffer;
+            this.textureCoordBuffer = textureCoordBuffer;
+
+            this.textureBuffer = WebGLUtils.loadTexture(gl, this.textureSource)!;
+        } else {
+            const colors = [
+                0.0, 1.0, 0.2, 1.0,
+                0.0, 1.0, 0.2, 1.0,
+                0.0, 1.0, 0.2, 1.0,
+                0.0, 1.0, 0.2, 1.0,
+            ];
+
+            const colorBuffer = gl.createBuffer()!;
+            gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+
+            this.colorBuffer = colorBuffer;
+        }
     }
 
     createBackground(): Background {
@@ -298,6 +433,8 @@ class Background extends PlaneShape {
 
     protected get positionBuffer() { return this.backgroundBuffer.positionBuffer; }
     protected get colorBuffer() { return this.backgroundBuffer.colorBuffer; }
+    protected get textureCoordBuffer() { return this.backgroundBuffer.textureCoordBuffer; }
+    protected get textureBuffer() { return this.backgroundBuffer.textureBuffer; }
 
     public get width() { return this.backgroundBuffer.width; }
     public get height() { return this.backgroundBuffer.height; }
@@ -325,14 +462,14 @@ type ObjectStore = {
     background: Background,
 }
 
-const initObjects = (gl: WebGLRenderingContext): ObjectStore => {
-    const paddleBuffer = new PaddleBuffer(gl, 5, 1);
+const initObjects = (gl: WebGLRenderingContext, useTexture: boolean): ObjectStore => {
+    const paddleBuffer = new PaddleBuffer(gl, 5, 1, useTexture);
     const paddles = [paddleBuffer.createPaddle(-18, 0), paddleBuffer.createPaddle(18, 0)];
 
-    const ballBuffer = new BallBuffer(gl, 1);
+    const ballBuffer = new BallBuffer(gl, 1, useTexture);
     const ball = ballBuffer.createBall();
 
-    const backgroundBuffer = new BackgroundBuffer(gl, 25, 48);
+    const backgroundBuffer = new BackgroundBuffer(gl, 25, 48, useTexture);
     const background = backgroundBuffer.createBackground();
 
     return {
@@ -385,6 +522,8 @@ enum Movement {
     Neutral = 0b00,
     Up = 0b01,
     Down = 0b10,
+    Left = 0b100,
+    Right = 0b1000,
 };
 
 const onKeyDown = (event: KeyboardEvent, callback) => {
@@ -397,12 +536,26 @@ const onKeyDown = (event: KeyboardEvent, callback) => {
     case "ArrowDown":
         callback(Op.Set, undefined, Movement.Down);
         break;
+    case "ArrowLeft":
+        callback(Op.Set, undefined, Movement.Left);
+        break;
+    case "ArrowRight":
+        callback(Op.Set, undefined, Movement.Right);
+        break;
+
     case "w":
         callback(Op.Set, Movement.Up, undefined);
         break;
     case "s":
         callback(Op.Set, Movement.Down, undefined);
         break;
+    case "a":
+        callback(Op.Set, Movement.Left, undefined);
+        break;
+    case "d":
+        callback(Op.Set, Movement.Right, undefined);
+        break;
+
     case "Enter":
         callback(Op.Special);
         break;
@@ -413,22 +566,35 @@ const onKeyUp = (event: KeyboardEvent, callback) => {
     const key = event.key;
 
     switch (key) {
-    case "ArrowUp":
-        callback(Op.Reset, undefined, Movement.Up);
-        break;
-    case "ArrowDown":
-        callback(Op.Reset, undefined, Movement.Down);
-        break;
-    case "w":
-        callback(Op.Reset, Movement.Up, undefined);
-        break;
-    case "s":
-        callback(Op.Reset, Movement.Down, undefined);
-        break;
+        case "ArrowUp":
+            callback(Op.Reset, undefined, Movement.Up);
+            break;
+        case "ArrowDown":
+            callback(Op.Reset, undefined, Movement.Down);
+            break;
+        case "ArrowLeft":
+            callback(Op.Reset, undefined, Movement.Left);
+            break;
+        case "ArrowRight":
+            callback(Op.Reset, undefined, Movement.Right);
+            break;
+
+        case "w":
+            callback(Op.Reset, Movement.Up, undefined);
+            break;
+        case "s":
+            callback(Op.Reset, Movement.Down, undefined);
+            break;
+        case "a":
+            callback(Op.Reset, Movement.Left, undefined);
+            break;
+        case "d":
+            callback(Op.Reset, Movement.Right, undefined);
+            break;
     }
 };
 
-const pongMain = () => {
+const pongMain = (useTexture: boolean) => {
     const canvas = <HTMLCanvasElement>document.querySelector("#glCanvas");
     const gl = canvas.getContext("webgl");
 
@@ -443,11 +609,16 @@ const pongMain = () => {
     const attribLocations = {
         vertexPosition: 0,
         vertexColor: 1,
+        vertexTextureCoord: 1,
     }
 
-    const shaderProgram = WebGLUtils.initShaderProgram(gl, vsSource, fsSource, program => {
+    const shaderSource = getShaderSource(useTexture);
+    log(shaderSource);
+
+    const shaderProgram = WebGLUtils.initShaderProgram(gl, shaderSource.vsSource, shaderSource.fsSource, program => {
         gl.bindAttribLocation(program, attribLocations.vertexPosition, 'aVertexPosition');
         gl.bindAttribLocation(program, attribLocations.vertexColor, 'aVertexColor');
+        gl.bindAttribLocation(program, attribLocations.vertexColor, 'aTextureCoord');
     })!;
 
     const programInfo: ProgramInfo = {
@@ -456,24 +627,32 @@ const pongMain = () => {
         uniformLocations: {
             projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix')!,
             modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix')!,
+            sampler: gl.getUniformLocation(shaderProgram, 'uSampler') || undefined,
         },
     };
 
-    const objects = initObjects(gl);
+    const objects = initObjects(gl, useTexture);
 
     let leftPaddleMovement = Movement.Neutral, rightPaddleMovement = Movement.Neutral;
     let resetStage = false;
 
     const getDelta = (movement: Movement) => {
-        let delta = 0.0;
+        let deltaY = 0.0;
+        let deltaX = 0.0;
 
         if (movement & Movement.Down)
-            delta += -20;
+            deltaY += -20;
 
         if (movement & Movement.Up)
-            delta += 20;
+            deltaY += 20;
 
-        return delta;
+        if (movement & Movement.Left)
+            deltaX += -20;
+
+        if (movement & Movement.Right)
+            deltaX += 20;
+
+        return { x: deltaX, y: deltaY };
     };
 
     let framesInsidePaddle = 0;
@@ -484,16 +663,19 @@ const pongMain = () => {
         const ball = objects.ball;
         const background = objects.background;
 
-        leftPaddle.position.y += getDelta(leftPaddleMovement) * deltaTime;
-        rightPaddle.position.y += getDelta(rightPaddleMovement) * deltaTime;
+        const leftDelta = getDelta(leftPaddleMovement);
+        const rightDelta = getDelta(rightPaddleMovement);
+        leftPaddle.position.x += leftDelta.x * deltaTime;
+        leftPaddle.position.y += leftDelta.y * deltaTime;
+        rightPaddle.position.x += rightDelta.x * deltaTime;
+        rightPaddle.position.y += rightDelta.y * deltaTime;
 
         if (Math.abs(ball.position.y) > (background.height / 2)) {
             ball.position.y = background.height / 2 * Math.sign(ball.position.y);
             ball.velocity.y = -ball.velocity.y;
         }
-        
+
         if (framesInsidePaddle == 0) {
-            log(leftPaddle, rightPaddle, ball);
             if (leftPaddle.contains(ball.position) || rightPaddle.contains(ball.position)) {
                 ball.velocity.x = -ball.velocity.x;
                 framesInsidePaddle++;
@@ -558,4 +740,4 @@ const pongMain = () => {
     startAnimation(gl, programInfo, objects, initialParameters, update);
 };
 
-document.body.onload = pongMain;
+document.body.onload = () => pongMain(true);
