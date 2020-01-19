@@ -11,23 +11,40 @@ const vertexShaderSource = `
     uniform mat4 uProjectionMatrix;
 
     varying mediump vec4 vColor;
+    varying vec3 vPosition;
 
     void main() {
         vec4 position = uRotationMatrix * uStartingMatrix * aVertexPosition;
         position.z += uZoom;
         gl_Position = uProjectionMatrix * position;
         gl_PointSize = 2.0;
+        vPosition = position.xyz;
         vColor = aVertexColor;
     }
 `;
 
 const fragmentShaderSource = `
-    varying mediump vec4 vColor;
+    precision mediump float;
+
+    varying vec4 vColor;
+    varying vec3 vPosition;
+
+    uniform vec4 uFogColor;
+    uniform float uFogDensity;
 
     void main() {
-        gl_FragColor = vColor;
+        #define LOG2 1.442695
+
+        float fogDistance = length(vPosition);
+        float fogAmount = 1. - exp2(-uFogDensity * uFogDensity * fogDistance * fogDistance * LOG2);
+        fogAmount = clamp(fogAmount, 0., 1.);
+
+        gl_FragColor = mix(vColor, uFogColor, fogAmount);
     }
 `;
+
+const fogColor = vec4.fromValues(0.8, 0.9, 1, 1);
+const fogDensity = 0.02;
 
 type ProgramInfo = {
     program: WebGLProgram
@@ -40,6 +57,8 @@ type ProgramInfo = {
         projectionMatrix: WebGLUniformLocation
         startingMatrix: WebGLUniformLocation
         rotationMatrix: WebGLUniformLocation
+        fogColor: WebGLUniformLocation
+        fogDensity: WebGLUniformLocation
     }
 };
 
@@ -79,7 +98,7 @@ abstract class Base {
         this.gl.vertexAttrib4fv(this.programInfo.attribLocations.vertexColor, color);
     }
 
-    protected setupProgram(startingMatrix: mat4, rotationMatrix: mat4, color: vec4, zoom: number) {
+    protected setupProgram(startingMatrix: mat4, rotationMatrix: mat4, color: vec4, zoom: number, fogColor: vec4, fogDensity: number) {
         const gl = this.gl;
         const programInfo = this.programInfo;
 
@@ -92,6 +111,16 @@ abstract class Base {
         gl.uniform1f(
             programInfo.uniformLocations.zoom,
             zoom
+        );
+
+        gl.uniform1f(
+            programInfo.uniformLocations.fogDensity,
+            fogDensity
+        );
+
+        gl.uniform4fv(
+            programInfo.uniformLocations.fogColor,
+            fogColor
         );
 
         gl.uniformMatrix4fv(
@@ -164,7 +193,14 @@ class Grid extends Base {
 
         const startingMatrix = this.getCenterMatrix();
 
-        this.setupProgram(startingMatrix, rotationMatrix, vec4.fromValues(1.0, 1.0, 1.0, 1.0), zoom);
+        this.setupProgram(
+            startingMatrix,
+            rotationMatrix,
+            vec4.fromValues(1.0, 1.0, 1.0, 1.0),
+            zoom,
+            fogColor,
+            fogDensity,
+        );
 
         gl.drawArrays(gl.LINES, 0.0, this.density * this.density * 2);
     }
@@ -288,7 +324,14 @@ class Grapher extends Base {
 
         const startingMatrix = this.getCenterMatrix();
 
-        this.setupProgram(startingMatrix, rotationMatrix, vec4.fromValues(0.0, 1.0, 0.0, 1.0), zoom);
+        this.setupProgram(
+            startingMatrix,
+            rotationMatrix,
+            vec4.fromValues(0.0, 1.0, 0.0, 1.0),
+            zoom,
+            fogColor,
+            fogDensity,
+        );
 
         const mode = this.filled! ? gl.TRIANGLES : gl.POINTS;
         gl.drawArrays(mode, 0.0, Grapher.getVertexCount(this.density!, this.filled!));
@@ -331,7 +374,9 @@ const drawScene = (gl: WebGLRenderingContext, grapher: Grapher, properties: Prop
     resize(canvas);
     gl.viewport(0.0, 0.0, canvas.clientWidth, canvas.clientHeight);
 
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
+    // gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
+    // @ts-ignore
+    gl.clearColor(...fogColor);
     gl.clearDepth(1.0);                 // Clear everything
     gl.enable(gl.DEPTH_TEST);           // Enable depth testing
     gl.depthFunc(gl.LEQUAL);            // Near things obscure far things
@@ -405,6 +450,8 @@ const plotMain = () => {
             projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix')!,
             startingMatrix: gl.getUniformLocation(shaderProgram, 'uStartingMatrix')!,
             rotationMatrix: gl.getUniformLocation(shaderProgram, 'uRotationMatrix')!,
+            fogColor: gl.getUniformLocation(shaderProgram, 'uFogColor')!,
+            fogDensity: gl.getUniformLocation(shaderProgram, 'uFogDensity')!,
         }
     };
 
