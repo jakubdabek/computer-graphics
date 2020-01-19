@@ -5,13 +5,18 @@ const vertexShaderSource = `
     attribute vec4 aVertexPosition;
     attribute vec4 aVertexColor;
 
-    uniform mat4 uModelViewMatrix;
+    uniform float uZoom;
+    uniform mat4 uStartingMatrix;
+    uniform mat4 uRotationMatrix;
     uniform mat4 uProjectionMatrix;
 
     varying mediump vec4 vColor;
 
     void main() {
-        gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+        vec4 position = uRotationMatrix * uStartingMatrix * aVertexPosition;
+        position.z += uZoom;
+        gl_Position = uProjectionMatrix * position;
+        gl_PointSize = 2.0;
         vColor = aVertexColor;
     }
 `;
@@ -31,8 +36,10 @@ type ProgramInfo = {
         vertexColor: number
     }
     uniformLocations: {
+        zoom: WebGLUniformLocation
         projectionMatrix: WebGLUniformLocation
-        modelViewMatrix: WebGLUniformLocation
+        startingMatrix: WebGLUniformLocation
+        rotationMatrix: WebGLUniformLocation
     }
 };
 
@@ -40,44 +47,15 @@ const interpolate = (min: number, max: number, percent: number) => {
     return min + percent * (max - min);
 }
 
-class Grid {
+abstract class Base {
     constructor(
-        private readonly gl: WebGLRenderingContext,
-        private readonly programInfo: ProgramInfo,
-        public readonly buffer: WebGLBuffer,
-        public readonly size: number,
-        public readonly density: number)
-    {
-        const data = new Float32Array(density * density * 2 * 3);
-        
-        const low = -size / 2;
-        const high = size / 2;
-        const interpolateCoord = v => interpolate(low, high, v / (density - 1));
-        
-        let currentCell = 0;
+        protected readonly gl: WebGLRenderingContext,
+        protected readonly programInfo: ProgramInfo,
+    ) {}
 
-        for (let i = 0; i < density; i++) {
-            let coords = [
-                // horizontal
-                [low, interpolateCoord(i), 0.0],
-                [high, interpolateCoord(i), 0.0],
-                //vertical
-                [interpolateCoord(i), low, 0.0],
-                [interpolateCoord(i), high, 0.0],
-            ]
+    protected abstract get buffer(): WebGLBuffer;
 
-            coords.forEach(([x, y, z]) => {
-                data[currentCell++] = x;
-                data[currentCell++] = y;
-                data[currentCell++] = z;
-            });
-        }
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-        gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-    }
-
-    private setupPositionBuffer() {
+    protected setupPositionBuffer() {
         const gl = this.gl;
 
         const numComponents = 3;
@@ -101,7 +79,7 @@ class Grid {
         this.gl.vertexAttrib4fv(this.programInfo.attribLocations.vertexColor, color);
     }
 
-    private setupProgram(projectionMatrix: mat4, modelViewMatrix: mat4, color: vec4) {
+    protected setupProgram(startingMatrix: mat4, rotationMatrix: mat4, color: vec4, zoom: number) {
         const gl = this.gl;
         const programInfo = this.programInfo;
 
@@ -111,87 +89,163 @@ class Grid {
 
         gl.useProgram(programInfo.program);
 
+        gl.uniform1f(
+            programInfo.uniformLocations.zoom,
+            zoom
+        );
+
         gl.uniformMatrix4fv(
             programInfo.uniformLocations.projectionMatrix,
             false,
-            projectionMatrix
+            WebGLUtils.getDefaultPerspective(gl)
         );
 
         gl.uniformMatrix4fv(
-            programInfo.uniformLocations.modelViewMatrix,
+            programInfo.uniformLocations.startingMatrix,
             false,
-            modelViewMatrix
+            startingMatrix
+        );
+
+        gl.uniformMatrix4fv(
+            programInfo.uniformLocations.rotationMatrix,
+            false,
+            rotationMatrix
         );
     }
 
-    render(rotationMatrix: mat4, zoom: number) {
-        const gl = this.gl;
-
-        const projectionMatrix = WebGLUtils.getDefaultPerspective(gl);
-        const modelViewMatrix = this.getCenterMatrix();
-
-        mat4.multiply(modelViewMatrix, rotationMatrix, modelViewMatrix);
-        mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, 0.0, zoom]);
-
-        this.setupProgram(projectionMatrix, modelViewMatrix, vec4.fromValues(1.0, 1.0, 1.0, 1.0));
-
-        gl.drawArrays(gl.LINES, 0.0, this.density * this.density * 2);
-    }
-
-    getCenterMatrix(): mat4 {
-        const mat = mat4.fromXRotation(mat4.create(), -Math.PI);
-
-        return mat;
-    }
+    abstract render(rotationMatrix: mat4, zoom: number);
 }
 
-class Grapher {
-    size?: number;
-    density?: number;
-    filled?: boolean;
-    grid?: Grid;
-    positionBuffer?: WebGLBuffer;
-    gridBuffer?: WebGLBuffer;
+class Grid extends Base {
+    private readonly density: number;
+    constructor(
+        gl: WebGLRenderingContext,
+        programInfo: ProgramInfo,
+        public readonly buffer: WebGLBuffer,
+        public readonly size: number,
+        public readonly graphDensity: number)
+    {
+        super(gl, programInfo);
 
-    constructor(public readonly gl: WebGLRenderingContext, public readonly programInfo: ProgramInfo) {
-        this.size = 10;
-        this.density = 100;
-        this.filled = true;
+        this.density = Math.log2(graphDensity) * 3;
+        const density = this.density;
 
-        this.initBuffer(this.size, this.density, (x, y) => x, this.filled);
-    }
-
-    private static getVertexCount(density: number, filled: boolean): number {
-        if (filled) {
-            return density * density;
-        } else {
-            return (density - 1) * (density - 1) * 6;
-        }
-    }
-
-    private initBuffer(size: number, density: number, f: (x: number, y: number) => number, filled: boolean) {
-        const gl = this.gl;
-
-        const values = new Float32Array(density * density);
-        for (let i = 0; i < density; i++) {
-            for (let j = 0; j < density; j++) {
-                values[i * density + j] = f(i, j);
-            }
-        }
-
-        if (this.positionBuffer === undefined) {
-            this.positionBuffer = this.gl.createBuffer()!;
-        }
-
-        const buf = this.positionBuffer;
+        const data = new Float32Array(density * density * 2 * 3);
 
         const low = -size / 2;
         const high = size / 2;
         const interpolateCoord = v => interpolate(low, high, v / (density - 1));
 
-        const fullData = new Float32Array(Grapher.getVertexCount(density, filled) * 3);
+        let currentCell = 0;
 
+        for (let i = 0; i < density; i++) {
+            let coords = [
+                // horizontal
+                [low, interpolateCoord(i), 0.0],
+                [high, interpolateCoord(i), 0.0],
+                //vertical
+                [interpolateCoord(i), low, 0.0],
+                [interpolateCoord(i), high, 0.0],
+            ]
+
+            coords.forEach(([x, y, z]) => {
+                data[currentCell++] = x;
+                data[currentCell++] = y;
+                data[currentCell++] = z;
+            });
+        }
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    }
+
+    render(rotationMatrix: mat4, zoom: number) {
+        const gl = this.gl;
+
+        const startingMatrix = this.getCenterMatrix();
+
+        this.setupProgram(startingMatrix, rotationMatrix, vec4.fromValues(1.0, 1.0, 1.0, 1.0), zoom);
+
+        gl.drawArrays(gl.LINES, 0.0, this.density * this.density * 2);
+    }
+
+    getCenterMatrix(): mat4 {
+        const mat = mat4.fromXRotation(mat4.create(), -Math.PI / 2);
+
+        return mat;
+    }
+}
+
+type GraphFunc = (x: number, y: number) => number
+
+class Grapher extends Base {
+    size?: number;
+    density?: number;
+    filled?: boolean;
+    func?: GraphFunc;
+    grid?: Grid;
+    buffer: WebGLBuffer;
+    gridBuffer: WebGLBuffer;
+
+    constructor(gl: WebGLRenderingContext, programInfo: ProgramInfo) {
+        super(gl, programInfo);
+
+        this.buffer = gl.createBuffer()!;
+        this.gridBuffer = gl.createBuffer()!;
+
+        this.setProperties(20, 500, false, (x, y) => Math.sin(x) * Math.cos(y));
+    }
+
+    public setProperties(size: number, density: number, filled: boolean, f: GraphFunc) {
+        this.size = size;
+        this.density = density;
+        this.filled = filled;
+        this.func = f;
+
+        this.init();
+    }
+
+    private init() {
+        this.initBuffer();
+        this.initGrid();
+    }
+
+    private static getVertexCount(density: number, filled: boolean): number {
         if (filled) {
+            return (density - 1) * (density - 1) * 6;
+        } else {
+            return density * density;
+        }
+    }
+
+    private initGrid() {
+        this.grid = new Grid(this.gl, this.programInfo, this.gridBuffer, this.size!, this.density!);
+    }
+
+    private initBuffer() {
+        const gl = this.gl;
+        const density = this.density!;
+        const size = this.size!;
+        const f = this.func!;
+
+        const low = -size / 2;
+        const high = size / 2;
+        const interpolateCoord = v => interpolate(low, high, v / (density - 1));
+
+        const values = new Float32Array(density * density);
+        for (let i = 0; i < density; i++) {
+            for (let j = 0; j < density; j++) {
+                values[i * density + j] = f(interpolateCoord(j), interpolateCoord(i));
+            }
+        }
+
+        const buf = this.buffer;
+
+        const fullData = new Float32Array(Grapher.getVertexCount(density, this.filled!) * 3);
+
+        debugger;
+
+        if (this.filled!) {
             let currentCell = 0;
             for (let i = 0; i < density - 1; i++) {
                 for (let j = 0; j < density - 1; j++) {
@@ -204,6 +258,9 @@ class Grapher {
                         [i + 1, j + 1],
                     ];
 
+                    if ((i == 200 || i == 400) && j == 250)
+                        debugger;
+
                     points.forEach(([y, x]) => {
                         fullData[currentCell++] = interpolateCoord(x);
                         fullData[currentCell++] = interpolateCoord(y);
@@ -213,8 +270,8 @@ class Grapher {
             }
         } else {
             let currentCell = 0;
-            for (let y = 0; y <= density; y++) {
-                for (let x = 0; x <= density; x++) {
+            for (let y = 0; y < density; y++) {
+                for (let x = 0; x < density; x++) {
                     fullData[currentCell++] = interpolateCoord(x);
                     fullData[currentCell++] = interpolateCoord(y);
                     fullData[currentCell++] = values[y * density + x];
@@ -224,80 +281,23 @@ class Grapher {
 
         gl.bindBuffer(gl.ARRAY_BUFFER, buf);
         gl.bufferData(gl.ARRAY_BUFFER, fullData, gl.STATIC_DRAW);
-
-        if (this.gridBuffer === undefined) {
-            this.gridBuffer = gl.createBuffer()!;
-        }
-
-        this.grid = new Grid(gl, this.programInfo, this.gridBuffer, size, density);
-    }
-
-    private setupPositionBuffer() {
-        const gl = this.gl;
-
-        const numComponents = 3;
-        const type = gl.FLOAT;
-        const normalize = false;
-        const stride = 0;
-        const offset = 0;
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer!);
-        gl.vertexAttribPointer(
-            this.programInfo.attribLocations.vertexPosition,
-            numComponents,
-            type,
-            normalize,
-            stride,
-            offset
-        );
-        gl.enableVertexAttribArray(this.programInfo.attribLocations.vertexPosition);
-    }
-
-    protected setupColorBuffer(color: vec4) {
-        this.gl.vertexAttrib4fv(this.programInfo.attribLocations.vertexColor, color);
-    }
-
-    private setupProgram(projectionMatrix: mat4, modelViewMatrix: mat4, color: vec4) {
-        const gl = this.gl;
-        const programInfo = this.programInfo;
-
-        this.setupPositionBuffer();
-
-        this.setupColorBuffer(color);
-
-        gl.useProgram(programInfo.program);
-
-        gl.uniformMatrix4fv(
-            programInfo.uniformLocations.projectionMatrix,
-            false,
-            projectionMatrix
-        );
-
-        gl.uniformMatrix4fv(
-            programInfo.uniformLocations.modelViewMatrix,
-            false,
-            modelViewMatrix
-        );
     }
 
     render(rotationMatrix: mat4, zoom: number) {
         const gl = this.gl;
 
-        const projectionMatrix = WebGLUtils.getDefaultPerspective(gl);
-        const modelViewMatrix = this.getCenterMatrix();
-        mat4.multiply(modelViewMatrix, rotationMatrix, modelViewMatrix);
-        mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, 0.0, zoom]);
+        const startingMatrix = this.getCenterMatrix();
 
-        this.setupProgram(projectionMatrix, modelViewMatrix, vec4.fromValues(0.0, 1.0, 0.0, 1.0));
+        this.setupProgram(startingMatrix, rotationMatrix, vec4.fromValues(0.0, 1.0, 0.0, 1.0), zoom);
 
-        gl.drawArrays(gl.TRIANGLES, 0.0, Grapher.getVertexCount(this.density!, this.filled!));
+        const mode = this.filled! ? gl.TRIANGLES : gl.POINTS;
+        gl.drawArrays(mode, 0.0, Grapher.getVertexCount(this.density!, this.filled!));
 
         this.grid!.render(rotationMatrix, zoom);
     }
 
     getCenterMatrix(): mat4 {
-        const mat = mat4.fromXRotation(mat4.create(), -Math.PI);
-        const move = -this.size! / 2;
-        mat4.translate(mat, mat, [move, move, 0.0]);
+        const mat = mat4.fromXRotation(mat4.create(), -Math.PI / 2);
 
         return mat;
     }
@@ -319,8 +319,9 @@ function resize(canvas) {
 }
 
 type Properties = {
-    modelViewMatrix: mat4,
     zoom: number,
+    rotationHorizontal: number,
+    rotationVertical: number,
 };
 
 const drawScene = (gl: WebGLRenderingContext, grapher: Grapher, properties: Properties) => {
@@ -337,28 +338,36 @@ const drawScene = (gl: WebGLRenderingContext, grapher: Grapher, properties: Prop
 
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    grapher.render(properties.modelViewMatrix, properties.zoom);
+    const rotationMatrix = mat4.fromYRotation(mat4.create(), properties.rotationHorizontal);
+    mat4.rotateX(rotationMatrix, rotationMatrix, properties.rotationVertical);
+
+    grapher.render(rotationMatrix, properties.zoom);
+};
+
+
+const initialProperties: Properties = {
+    zoom: -30,
+    rotationVertical: Math.PI / 4,
+    rotationHorizontal: 0.0,
 };
 
 const onKeyDown = (event: KeyboardEvent, properties: Properties) => {
     const key = event.key;
 
-    const mat = properties.modelViewMatrix;
-
     console.log(key);
 
     switch (key) {
     case "ArrowUp":
-        mat4.rotateX(mat, mat, 0.2);
+        properties.rotationVertical += 0.1;
         break;
     case "ArrowDown":
-        mat4.rotateX(mat, mat, -0.2);
+        properties.rotationVertical -= 0.1;
         break;
     case "ArrowLeft":
-        mat4.rotateY(mat, mat, 0.2);
+        properties.rotationHorizontal -= 0.1;
         break;
     case "ArrowRight":
-        mat4.rotateY(mat, mat, -0.2);
+        properties.rotationHorizontal += 0.1;
         break;
     case "+":
         properties.zoom += 1;
@@ -367,7 +376,9 @@ const onKeyDown = (event: KeyboardEvent, properties: Properties) => {
         properties.zoom -= 1;
         break;
     case "Backspace":
-        mat4.identity(mat);
+        properties.zoom = initialProperties.zoom;
+        properties.rotationHorizontal = initialProperties.rotationHorizontal;
+        properties.rotationVertical = initialProperties.rotationVertical;
         break;
     }
 };
@@ -380,7 +391,7 @@ const plotMain = () => {
         alert("Unable to initialize WebGL. Your browser or machine may not support it.");
         return;
     }
-    
+
     const shaderProgram = WebGLUtils.initShaderProgram(gl, vertexShaderSource, fragmentShaderSource)!;
 
     const programInfo: ProgramInfo = {
@@ -390,18 +401,17 @@ const plotMain = () => {
             vertexColor: gl.getAttribLocation(shaderProgram, "aVertexColor"),
         },
         uniformLocations: {
+            zoom: gl.getUniformLocation(shaderProgram, "uZoom")!,
             projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix')!,
-            modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix')!,
+            startingMatrix: gl.getUniformLocation(shaderProgram, 'uStartingMatrix')!,
+            rotationMatrix: gl.getUniformLocation(shaderProgram, 'uRotationMatrix')!,
         }
     };
 
     const grapher = new Grapher(gl, programInfo);
 
-    const properties: Properties = {
-        modelViewMatrix: mat4.create(),
-        zoom: 20,
-    }
-    
+    const properties: Properties = {...initialProperties};
+
     const draw = () => {
         drawScene(gl, grapher, properties);
     }
