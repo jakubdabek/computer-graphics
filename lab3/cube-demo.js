@@ -126,7 +126,7 @@ var makeShaderProgram = function(gl){
 	console.log("Could not initialise shaders");
 	return null;
     }
-    
+
     gl.useProgram(shaderProgram);
 
     /* set vertex attributes locations */
@@ -189,7 +189,7 @@ var drawBufferFace = function ( gl, rotation, move, projection, buffer, textureI
     gl.uniformMatrix4fv(rotationLocation, false, rotation);
     gl.uniform3fv(moveLocation,  move  );
     gl.uniformMatrix4fv(projectionLocation, false, projection);
-    
+
     gl.enableVertexAttribArray(aPositionLocation);
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.vertexAttribPointer(aPositionLocation, 3, gl.FLOAT, false, 0, 0);
@@ -267,7 +267,7 @@ var moveVector=[0,0,10];
 var createProjectionMatrix4 = function (gl, zNear, zFar, zoomY ) {
     /* arguments:
        gl - GL context
-       zNear, zFar, zoomY - Y-frustum parameters 
+       zNear, zFar, zoomY - Y-frustum parameters
 
        returns: 4x4 row-major order perspective matrix
     */
@@ -306,11 +306,11 @@ var glMatrix4 = function (  xx, yx, zx, wx,
 
 var glMatrix4FromMatrix = function( m ) {
     /* arguments:
-       m - the 4x4 array with the matrix in row-major order 
+       m - the 4x4 array with the matrix in row-major order
 
        returns: sequence of elements in column-major order in Float32Array for GL
     */
-    return glMatrix4( 
+    return glMatrix4(
 	m[0][0], m[0][1], m[0][2], m[0][3],
 	m[1][0], m[1][1], m[1][2], m[1][3],
 	m[2][0], m[2][1], m[2][2], m[2][3],
@@ -324,23 +324,23 @@ var scalarProduct4 = function( v,w ) {
 };
 
 var matrix4Column = function( m, c ) {
-    return [ m[0][c], m[1][c], m[2][c], m[3][c] ]; 
+    return [ m[0][c], m[1][c], m[2][c], m[3][c] ];
 };
 
-var matrix4Product = function( m1, m2){ 
+var matrix4Product = function( m1, m2){
     var sp = scalarProduct4;
     var col = matrix4Column;
-    return [ 
-	[ sp(m1[0], col(m2, 0)) , sp(m1[0], col(m2, 1)),  sp(m1[0], col(m2, 2)),  sp(m1[0], col(m2, 3)) ], 
-	[ sp(m1[1], col(m2, 0)) , sp(m1[1], col(m2, 1)),  sp(m1[1], col(m2, 2)),  sp(m1[1], col(m2, 3)) ], 
-	[ sp(m1[2], col(m2, 0)) , sp(m1[2], col(m2, 1)),  sp(m1[2], col(m2, 2)),  sp(m1[1], col(m2, 3)) ], 
-	[ sp(m1[3], col(m2, 0)) , sp(m1[3], col(m2, 1)),  sp(m1[3], col(m2, 2)),  sp(m1[3], col(m2, 3)) ] 
+    return [
+	[ sp(m1[0], col(m2, 0)) , sp(m1[0], col(m2, 1)),  sp(m1[0], col(m2, 2)),  sp(m1[0], col(m2, 3)) ],
+	[ sp(m1[1], col(m2, 0)) , sp(m1[1], col(m2, 1)),  sp(m1[1], col(m2, 2)),  sp(m1[1], col(m2, 3)) ],
+	[ sp(m1[2], col(m2, 0)) , sp(m1[2], col(m2, 1)),  sp(m1[2], col(m2, 2)),  sp(m1[1], col(m2, 3)) ],
+	[ sp(m1[3], col(m2, 0)) , sp(m1[3], col(m2, 1)),  sp(m1[3], col(m2, 2)),  sp(m1[3], col(m2, 3)) ]
     ];
 };
 
 var matrix4RotatedXZ = function(matrix, alpha ){
     var c = Math.cos( alpha );
-    var s = Math.sin( alpha ); 
+    var s = Math.sin( alpha );
     var rot = [ [ c,  0, -s, 0 ],
 		[ 0,  1,  0, 0 ],
 		[ s,  0,  c, 0 ],
@@ -352,10 +352,10 @@ var matrix4RotatedXZ = function(matrix, alpha ){
 
 var matrix4RotatedYZ = function(matrix, alpha ){
     var c = Math.cos( alpha );
-    var s = Math.sin( alpha ); 
+    var s = Math.sin( alpha );
     var rot = [ [ 1,  0,  0, 0 ],
 		[ 0,  c, -s, 0 ],
-		[ 0,  s,  c, 0 ], 
+		[ 0,  s,  c, 0 ],
 		[ 0,  0,  0, 1 ]
 	      ];
 
@@ -374,7 +374,7 @@ var redraw = function(){
     }
 
     var projectionMatrix = glMatrix4FromMatrix( createProjectionMatrix4(gl,
-								      PROJECTION_Z_NEAR, 
+								      PROJECTION_Z_NEAR,
 								      PROJECTION_Z_FAR,
 								      PROJECTION_ZOOM_Y )
 					    );
@@ -386,22 +386,22 @@ var redraw = function(){
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
 
-    drawBufferFace( gl, rotationMatrix, moveVector, projectionMatrix, 
-			   xPlusArrayBuffer,  boxFaceTextures[0] , 1 ) 
-    drawBufferFace( gl, rotationMatrix, moveVector, projectionMatrix, 
-			   xMinusArrayBuffer,  boxFaceTextures[1] , 2 ) 
+    drawBufferFace( gl, rotationMatrix, moveVector, projectionMatrix,
+			   xPlusArrayBuffer,  boxFaceTextures[0] , 1 )
+    drawBufferFace( gl, rotationMatrix, moveVector, projectionMatrix,
+			   xMinusArrayBuffer,  boxFaceTextures[1] , 2 )
 
-    drawBufferFace( gl, rotationMatrix, moveVector, projectionMatrix, 
-			   yPlusArrayBuffer,  boxFaceTextures[2] , 3 ) 
-    drawBufferFace( gl, rotationMatrix, moveVector, projectionMatrix, 
-			   yMinusArrayBuffer,  boxFaceTextures[3] , 4 ) 
+    drawBufferFace( gl, rotationMatrix, moveVector, projectionMatrix,
+			   yPlusArrayBuffer,  boxFaceTextures[2] , 3 )
+    drawBufferFace( gl, rotationMatrix, moveVector, projectionMatrix,
+			   yMinusArrayBuffer,  boxFaceTextures[3] , 4 )
 
-    drawBufferFace( gl, rotationMatrix, moveVector, projectionMatrix, 
-			   zPlusArrayBuffer,  boxFaceTextures[4] , 5 ) 
-    drawBufferFace( gl, rotationMatrix, moveVector, projectionMatrix, 
-			   zMinusArrayBuffer,  boxFaceTextures[5] , 6 ) 
+    drawBufferFace( gl, rotationMatrix, moveVector, projectionMatrix,
+			   zPlusArrayBuffer,  boxFaceTextures[4] , 5 )
+    drawBufferFace( gl, rotationMatrix, moveVector, projectionMatrix,
+			   zMinusArrayBuffer,  boxFaceTextures[5] , 6 )
 
-    sbx_drawSkybox ( gl, 
+    sbx_drawSkybox ( gl,
 		     rotationMatrix,
 		     projectionMatrix
 		   );
@@ -495,7 +495,7 @@ window.onload = function(){
 
 
 
-    cubeFace=[ 
+    cubeFace=[
 	gl.TEXTURE_CUBE_MAP_POSITIVE_X,
 	gl.TEXTURE_CUBE_MAP_NEGATIVE_X,
 	gl.TEXTURE_CUBE_MAP_POSITIVE_Y,
@@ -503,8 +503,8 @@ window.onload = function(){
 	gl.TEXTURE_CUBE_MAP_POSITIVE_Z,
 	gl.TEXTURE_CUBE_MAP_NEGATIVE_Z,
     ];
-    
-    skyboxXYZ= [ 
+
+    skyboxXYZ= [
 	sbx_xyzXPlus , sbx_xyzXMinus,
 	sbx_xyzYPlus , sbx_xyzYMinus,
 	sbx_xyzZPlus , sbx_xyzZMinus
@@ -527,7 +527,7 @@ window.onload = function(){
 
     makeShaderProgram(gl);
     sbx_makeShaderProgram(gl);
-	    
+
     var fun = sbx_fun;
     var r = Math.floor( Math.random()* fun.length );
     var g = Math.floor( Math.random()* fun.length );

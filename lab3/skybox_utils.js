@@ -128,7 +128,7 @@ var sbx_xyzYPlus = [0,5,1];
 
 var sbx_fillCanvas = function(canvas, fRGB){
     /* fRGB - function of (h,v,depth) - returns vector [r,g,b] in [0 ... 255]^3 */
-    
+
     var ctx = canvas.getContext("2d");
     var maxHorizontal = canvas.width/2;
     var maxVertical  = canvas.height/2;
@@ -142,7 +142,7 @@ var sbx_fillCanvas = function(canvas, fRGB){
 
 var sbx_fillCanvasUpsideDown = function(canvas, fRGB){
     /* fRGB - function of (h,v,depth) - returns vector [r,g,b] in [0 ... 255]^3 */
-    
+
     var ctx = canvas.getContext("2d");
     var maxHorizontal = canvas.width/2;
     var maxVertical  = canvas.height/2;
@@ -272,7 +272,7 @@ var sbx_makeShaderProgram = function(gl){
 	console.log("Could not initialise shaders");
 	return null;
     }
-    
+
     gl.useProgram(sbx_shaderProgram);
 
     /* set vertex attributes locations */
@@ -330,7 +330,7 @@ var sbx_drawSkybox = function ( gl, view, projection ) {
 
     gl.uniformMatrix4fv(sbx_view, false, view);
     gl.uniformMatrix4fv(sbx_projection, false, projection);
-    
+
     gl.enableVertexAttribArray(sbx_position);
     gl.bindBuffer(gl.ARRAY_BUFFER, sbx_arrayBuffer);
     gl.vertexAttribPointer(sbx_position, 3, gl.FLOAT, false, 0, 0);
