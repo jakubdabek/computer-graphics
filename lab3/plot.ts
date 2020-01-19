@@ -44,7 +44,7 @@ const fragmentShaderSource = `
 `;
 
 const fogColor = vec4.fromValues(0.8, 0.9, 1, 1);
-const fogDensity = 0.02;
+let fogDensity = 0.02;
 
 type ProgramInfo = {
     program: WebGLProgram
@@ -213,12 +213,15 @@ class Grid extends Base {
 }
 
 type GraphFunc = (x: number, y: number) => number
+type GraphProperties = {
+    size: number,
+    density: number,
+    filled: boolean,
+    f: GraphFunc,
+};
 
 class Grapher extends Base {
-    size?: number;
-    density?: number;
-    filled?: boolean;
-    func?: GraphFunc;
+    properties?: GraphProperties;
     grid?: Grid;
     buffer: WebGLBuffer;
     gridBuffer: WebGLBuffer;
@@ -228,15 +231,10 @@ class Grapher extends Base {
 
         this.buffer = gl.createBuffer()!;
         this.gridBuffer = gl.createBuffer()!;
-
-        this.setProperties(20, 500, false, (x, y) => Math.sin(x) * Math.cos(y));
     }
 
-    public setProperties(size: number, density: number, filled: boolean, f: GraphFunc) {
-        this.size = size;
-        this.density = density;
-        this.filled = filled;
-        this.func = f;
+    public setProperties(graphProperties: GraphProperties) {
+        this.properties = graphProperties;
 
         this.init();
     }
@@ -255,14 +253,13 @@ class Grapher extends Base {
     }
 
     private initGrid() {
-        this.grid = new Grid(this.gl, this.programInfo, this.gridBuffer, this.size!, this.density!);
+        this.grid = new Grid(this.gl, this.programInfo, this.gridBuffer, this.properties!.size, this.properties!.density);
     }
 
     private initBuffer() {
         const gl = this.gl;
-        const density = this.density!;
-        const size = this.size!;
-        const f = this.func!;
+
+        const { density, size, f, filled } = this.properties!;
 
         const low = -size / 2;
         const high = size / 2;
@@ -277,11 +274,11 @@ class Grapher extends Base {
 
         const buf = this.buffer;
 
-        const fullData = new Float32Array(Grapher.getVertexCount(density, this.filled!) * 3);
+        const fullData = new Float32Array(Grapher.getVertexCount(density, filled) * 3);
 
         debugger;
 
-        if (this.filled!) {
+        if (filled) {
             let currentCell = 0;
             for (let i = 0; i < density - 1; i++) {
                 for (let j = 0; j < density - 1; j++) {
@@ -333,8 +330,9 @@ class Grapher extends Base {
             fogDensity,
         );
 
-        const mode = this.filled! ? gl.TRIANGLES : gl.POINTS;
-        gl.drawArrays(mode, 0.0, Grapher.getVertexCount(this.density!, this.filled!));
+        const { filled, density } = this.properties!;
+        const mode = filled ? gl.TRIANGLES : gl.POINTS;
+        gl.drawArrays(mode, 0.0, Grapher.getVertexCount(density, filled));
 
         this.grid!.render(rotationMatrix, zoom);
     }
@@ -396,34 +394,90 @@ const initialProperties: Properties = {
     rotationHorizontal: 0.0,
 };
 
-const onKeyDown = (event: KeyboardEvent, properties: Properties) => {
+const functions = [
+    (x: number, y: number) => Math.sin(x) * Math.cos(y) * 2.0,
+    (x: number, y: number) => Math.sin(x) * Math.cos(y) * x * Math.log(Math.abs(y)) * 0.5,
+    (x: number, y: number) => (x + y) / 4.0,
+    (x: number, y: number) => x * y / 6.0,
+    (x: number, y: number) => Math.trunc(x) * Math.cos(y),
+    (x: number, y: number) => Math.tan(x) * Math.tanh(y),
+];
+
+let functionPtr = 0;
+
+const initialGraphProperties: GraphProperties = {
+    size: 16,
+    density: 512,
+    filled: false,
+    f: functions[functionPtr],
+};
+
+let graphProperties: GraphProperties = { ...initialGraphProperties };
+
+const updateGrapher = (grapher: Grapher) => {
+    grapher.setProperties(graphProperties);
+};
+
+const onKeyDown = (event: KeyboardEvent, args: {grapher: Grapher, properties: Properties}) => {
     const key = event.key;
 
     console.log(key);
 
     switch (key) {
     case "ArrowUp":
-        properties.rotationVertical += 0.1;
+        args.properties.rotationVertical += 0.1;
         break;
     case "ArrowDown":
-        properties.rotationVertical -= 0.1;
+        args.properties.rotationVertical -= 0.1;
         break;
     case "ArrowLeft":
-        properties.rotationHorizontal -= 0.1;
+        args.properties.rotationHorizontal -= 0.1;
         break;
     case "ArrowRight":
-        properties.rotationHorizontal += 0.1;
+        args.properties.rotationHorizontal += 0.1;
         break;
     case "+":
-        properties.zoom += 1;
+        args.properties.zoom += 1;
         break;
     case "-":
-        properties.zoom -= 1;
+        args.properties.zoom -= 1;
         break;
+    case "f":
+        functionPtr = (functionPtr + 1) % functions.length;
+        graphProperties.f = functions[functionPtr];
+        updateGrapher(args.grapher);
+        break;
+    case "m":
+        graphProperties.filled = !graphProperties.filled;
+        updateGrapher(args.grapher);
+        break;
+    case "d":
+        fogDensity += 0.004;
+        break;
+    case "D":
+        fogDensity -= 0.004;
+        break;
+    case "<":
+        graphProperties.density /= 2;
+        updateGrapher(args.grapher);
+        break;
+    case ">":
+        graphProperties.density *= 2;
+        updateGrapher(args.grapher);
+        break;
+    case "[":
+        graphProperties.size /= 2;
+        updateGrapher(args.grapher);
+        break;
+    case "]":
+        graphProperties.size *= 2;
+        updateGrapher(args.grapher);
+        break;
+
     case "Backspace":
-        properties.zoom = initialProperties.zoom;
-        properties.rotationHorizontal = initialProperties.rotationHorizontal;
-        properties.rotationVertical = initialProperties.rotationVertical;
+        args.properties = { ...initialProperties };
+        graphProperties = { ...initialGraphProperties };
+        updateGrapher(args.grapher);
         break;
     }
 };
@@ -456,15 +510,18 @@ const plotMain = () => {
     };
 
     const grapher = new Grapher(gl, programInfo);
+    updateGrapher(grapher);
 
     const properties: Properties = {...initialProperties};
 
+    const args = { grapher, properties };
+
     const draw = () => {
-        drawScene(gl, grapher, properties);
+        drawScene(gl, args.grapher, args.properties);
     }
 
     window.onkeydown = e => {
-        onKeyDown(e, properties);
+        onKeyDown(e, args);
         draw();
     }
 
