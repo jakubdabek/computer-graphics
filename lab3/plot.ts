@@ -1,52 +1,128 @@
 import { WebGLUtils } from "./webgl-utils.js";
-import { mat4, vec4 } from "./gl-matrix/index.js";
+import { mat4, vec4, vec3 } from "./gl-matrix/index.js";
 
-const vertexShaderSource = `
-    attribute vec4 aVertexPosition;
-    attribute vec4 aVertexColor;
+const getShaderSources = (light: boolean) => {
+    if (light) {
+        return {
+            vertexShaderSource: `
+                attribute vec4 aVertexPosition;
+                attribute vec3 aVertexNormal;
+            
+                uniform float uZoom;
+                uniform mat4 uWorldMatrix;
+                uniform mat4 uWorldInverseTransposeMatrix;
+                uniform mat4 uProjectionMatrix;
 
-    uniform float uZoom;
-    uniform mat4 uStartingMatrix;
-    uniform mat4 uRotationMatrix;
-    uniform mat4 uProjectionMatrix;
-
-    varying mediump vec4 vColor;
-    varying vec3 vPosition;
-
-    void main() {
-        vec4 position = uRotationMatrix * uStartingMatrix * aVertexPosition;
-        position.z += uZoom;
-        gl_Position = uProjectionMatrix * position;
-        gl_PointSize = 2.0;
-        vPosition = position.xyz;
-        vColor = aVertexColor;
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+            
+                void main() {
+                    vec4 position = uWorldMatrix * aVertexPosition;
+                    position.z += uZoom;
+                    gl_Position = uProjectionMatrix * position;
+                    gl_PointSize = 2.0;
+            
+                    vPosition = position.xyz;
+                    vNormal = mat3(uWorldInverseTransposeMatrix) * aVertexNormal;
+                }
+            `,
+            fragmentShaderSource: `
+                precision mediump float;
+            
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+            
+                uniform vec4 uFogColor;
+                uniform float uFogDensity;
+            
+                uniform vec3 uReverseLightDirection;
+                uniform vec4 uLightColor;
+            
+                void main() {
+                    #define LOG2 1.442695
+            
+                    float fogDistance = length(vPosition);
+                    float fogAmount = 1. - exp2(-uFogDensity * uFogDensity * fogDistance * fogDistance * LOG2);
+                    fogAmount = clamp(fogAmount, 0., 1.);
+            
+                    vec3 normal = normalize(vNormal);
+                    float light = max(dot(normal, uReverseLightDirection), 0.0);
+            
+                    vec4 color = uLightColor;
+                    color.rgb *= light;
+            
+                    gl_FragColor = mix(color, uFogColor, fogAmount);
+                }
+            `,
+        }
+    } else {
+        return {
+            vertexShaderSource: `
+                attribute vec4 aVertexPosition;
+                attribute vec4 aVertexColor;
+            
+                uniform float uZoom;
+                uniform mat4 uWorldMatrix;
+                uniform mat4 uProjectionMatrix;
+            
+                varying mediump vec4 vColor;
+                varying vec3 vPosition;
+            
+                void main() {
+                    vec4 position = uWorldMatrix * aVertexPosition;
+                    position.z += uZoom;
+                    gl_Position = uProjectionMatrix * position;
+                    gl_PointSize = 2.0;
+            
+                    vPosition = position.xyz;
+                    vColor = aVertexColor;
+                }
+            `,
+            fragmentShaderSource: `
+                precision mediump float;
+            
+                varying vec4 vColor;
+                varying vec3 vPosition;
+            
+                uniform vec4 uFogColor;
+                uniform float uFogDensity;
+            
+                void main() {
+                    #define LOG2 1.442695
+            
+                    float fogDistance = length(vPosition);
+                    float fogAmount = 1. - exp2(-uFogDensity * uFogDensity * fogDistance * fogDistance * LOG2);
+                    fogAmount = clamp(fogAmount, 0., 1.);
+            
+                    gl_FragColor = mix(vColor, uFogColor, fogAmount);
+                }
+            `,
+        }
     }
-`;
-
-const fragmentShaderSource = `
-    precision mediump float;
-
-    varying vec4 vColor;
-    varying vec3 vPosition;
-
-    uniform vec4 uFogColor;
-    uniform float uFogDensity;
-
-    void main() {
-        #define LOG2 1.442695
-
-        float fogDistance = length(vPosition);
-        float fogAmount = 1. - exp2(-uFogDensity * uFogDensity * fogDistance * fogDistance * LOG2);
-        fogAmount = clamp(fogAmount, 0., 1.);
-
-        gl_FragColor = mix(vColor, uFogColor, fogAmount);
-    }
-`;
+}
 
 const fogColor = vec4.fromValues(0.8, 0.9, 1, 1);
 let fogDensity = 0.02;
 
-type ProgramInfo = {
+type LightProgramInfo = {
+    program: WebGLProgram
+    attribLocations: {
+        vertexPosition: number
+        vertexNormal: number
+    }
+    uniformLocations: {
+        zoom: WebGLUniformLocation
+        projectionMatrix: WebGLUniformLocation
+        worldMatrix: WebGLUniformLocation
+        worldInverseTransposeMatrix: WebGLUniformLocation
+        fogColor: WebGLUniformLocation
+        fogDensity: WebGLUniformLocation
+        reverseLightDirection: WebGLUniformLocation
+        lightColor: WebGLUniformLocation
+    }
+};
+
+type NoLightProgramInfo = {
     program: WebGLProgram
     attribLocations: {
         vertexPosition: number
@@ -55,8 +131,7 @@ type ProgramInfo = {
     uniformLocations: {
         zoom: WebGLUniformLocation
         projectionMatrix: WebGLUniformLocation
-        startingMatrix: WebGLUniformLocation
-        rotationMatrix: WebGLUniformLocation
+        worldMatrix: WebGLUniformLocation
         fogColor: WebGLUniformLocation
         fogDensity: WebGLUniformLocation
     }
@@ -69,12 +144,21 @@ const interpolate = (min: number, max: number, percent: number) => {
 abstract class Base {
     constructor(
         protected readonly gl: WebGLRenderingContext,
-        protected readonly programInfo: ProgramInfo,
+        protected readonly lightProgramInfo: LightProgramInfo,
+        protected readonly noLightProgramInfo: NoLightProgramInfo,
     ) {}
 
     protected abstract get buffer(): WebGLBuffer;
+    protected abstract get normalBuffer(): WebGLBuffer | null;
 
-    protected setupPositionBuffer() {
+    protected info(light: boolean) {
+        if (light)
+            return this.lightProgramInfo;
+        else
+            return this.noLightProgramInfo;
+    }
+
+    protected setupPositionBuffer(light: boolean) {
         const gl = this.gl;
 
         const numComponents = 3;
@@ -84,29 +168,113 @@ abstract class Base {
         const offset = 0;
         gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
         gl.vertexAttribPointer(
-            this.programInfo.attribLocations.vertexPosition,
+            this.info(light).attribLocations.vertexPosition,
             numComponents,
             type,
             normalize,
             stride,
             offset
         );
-        gl.enableVertexAttribArray(this.programInfo.attribLocations.vertexPosition);
+        gl.enableVertexAttribArray(this.info(light).attribLocations.vertexPosition);
     }
 
     protected setupColorBuffer(color: vec4) {
-        this.gl.vertexAttrib4fv(this.programInfo.attribLocations.vertexColor, color);
+        this.gl.vertexAttrib4fv(this.noLightProgramInfo.attribLocations.vertexColor, color);
     }
 
-    protected setupProgram(startingMatrix: mat4, rotationMatrix: mat4, color: vec4, zoom: number, fogColor: vec4, fogDensity: number) {
+    protected setupNormalBuffer() {
+        const buf = this.normalBuffer;
+        if (buf === null)
+            return;
+        
         const gl = this.gl;
-        const programInfo = this.programInfo;
 
-        this.setupPositionBuffer();
+        const numComponents = 3;
+        const type = gl.FLOAT;
+        const normalize = false;
+        const stride = 0;
+        const offset = 0;
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.vertexAttribPointer(
+            this.lightProgramInfo.attribLocations.vertexNormal,
+            numComponents,
+            type,
+            normalize,
+            stride,
+            offset
+        );
+        gl.enableVertexAttribArray(this.lightProgramInfo.attribLocations.vertexNormal);
+    }
 
+    protected setupLightProgram(
+        startingMatrix: mat4,
+        rotationMatrix: mat4,
+        zoom: number,
+        fogColor: vec4,
+        fogDensity: number,
+        reverseLightDirection: vec3,
+        lightColor: vec4
+    ) {
+        this.setupProgram(
+            true,
+            startingMatrix,
+            rotationMatrix,
+            zoom,
+            fogColor,
+            fogDensity,
+        );
+
+        this.setupNormalBuffer();
+
+        const gl = this.gl;
+
+        const programInfo = this.lightProgramInfo;
+
+        gl.uniform3fv(
+            programInfo.uniformLocations.reverseLightDirection,
+            reverseLightDirection
+        );
+
+        gl.uniform4fv(
+            programInfo.uniformLocations.lightColor,
+            lightColor
+        );
+    }
+
+    protected setupNoLightProgram(
+        startingMatrix: mat4,
+        rotationMatrix: mat4,
+        zoom: number,
+        color: vec4,
+        fogColor: vec4,
+        fogDensity: number,
+    ) {
+        this.setupProgram(
+            false,
+            startingMatrix,
+            rotationMatrix,
+            zoom,
+            fogColor,
+            fogDensity,
+        );
+            
         this.setupColorBuffer(color);
+    }
+
+    private setupProgram(
+        light: boolean,
+        startingMatrix: mat4,
+        rotationMatrix: mat4,
+        zoom: number,
+        fogColor: vec4,
+        fogDensity: number
+    ) {
+        const gl = this.gl;
+        const programInfo = this.info(light);
 
         gl.useProgram(programInfo.program);
+
+        this.setupPositionBuffer(light);
 
         gl.uniform1f(
             programInfo.uniformLocations.zoom,
@@ -129,17 +297,29 @@ abstract class Base {
             WebGLUtils.getDefaultPerspective(gl)
         );
 
-        gl.uniformMatrix4fv(
-            programInfo.uniformLocations.startingMatrix,
-            false,
-            startingMatrix
-        );
+        const worldMatrix = mat4.mul(mat4.create(), rotationMatrix, startingMatrix);
 
         gl.uniformMatrix4fv(
-            programInfo.uniformLocations.rotationMatrix,
+            programInfo.uniformLocations.worldMatrix,
             false,
-            rotationMatrix
+            worldMatrix
         );
+
+        if (light) {
+            const worldInverseTransposeMatrix = mat4.invert(worldMatrix, worldMatrix);
+            if (worldInverseTransposeMatrix === null) {
+                alert("bruh");
+                return;
+            }
+    
+            mat4.transpose(worldInverseTransposeMatrix, worldInverseTransposeMatrix);
+    
+            gl.uniformMatrix4fv(
+                this.lightProgramInfo.uniformLocations.worldInverseTransposeMatrix,
+                false,
+                worldInverseTransposeMatrix
+            );
+        }
     }
 
     abstract render(rotationMatrix: mat4, zoom: number);
@@ -149,12 +329,13 @@ class Grid extends Base {
     private readonly density: number;
     constructor(
         gl: WebGLRenderingContext,
-        programInfo: ProgramInfo,
+        lightProgramInfo: LightProgramInfo,
+        noLightProgramInfo: NoLightProgramInfo,
         public readonly buffer: WebGLBuffer,
         public readonly size: number,
         public readonly graphDensity: number)
     {
-        super(gl, programInfo);
+        super(gl, lightProgramInfo, noLightProgramInfo);
 
         this.density = Math.log2(graphDensity) * 3;
         const density = this.density;
@@ -188,16 +369,20 @@ class Grid extends Base {
         gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
     }
 
+    protected get normalBuffer(): WebGLBuffer | null {
+        return null;
+    }
+
     render(rotationMatrix: mat4, zoom: number) {
         const gl = this.gl;
 
         const startingMatrix = this.getCenterMatrix();
 
-        this.setupProgram(
+        this.setupNoLightProgram(
             startingMatrix,
             rotationMatrix,
-            vec4.fromValues(1.0, 1.0, 1.0, 1.0),
             zoom,
+            vec4.fromValues(1.0, 1.0, 1.0, 1.0),
             fogColor,
             fogDensity,
         );
@@ -224,12 +409,18 @@ class Grapher extends Base {
     properties?: GraphProperties;
     grid?: Grid;
     buffer: WebGLBuffer;
+    normalBuffer: WebGLBuffer;
     gridBuffer: WebGLBuffer;
 
-    constructor(gl: WebGLRenderingContext, programInfo: ProgramInfo) {
-        super(gl, programInfo);
+    constructor(
+        gl: WebGLRenderingContext,
+        lightProgramInfo: LightProgramInfo,
+        noLightProgramInfo: NoLightProgramInfo
+    ) {
+        super(gl, lightProgramInfo, noLightProgramInfo);
 
         this.buffer = gl.createBuffer()!;
+        this.normalBuffer = gl.createBuffer()!;
         this.gridBuffer = gl.createBuffer()!;
     }
 
@@ -253,7 +444,14 @@ class Grapher extends Base {
     }
 
     private initGrid() {
-        this.grid = new Grid(this.gl, this.programInfo, this.gridBuffer, this.properties!.size, this.properties!.density);
+        this.grid = new Grid(
+            this.gl,
+            this.lightProgramInfo,
+            this.noLightProgramInfo,
+            this.gridBuffer,
+            this.properties!.size,
+            this.properties!.density
+        );
     }
 
     private initBuffer() {
@@ -265,55 +463,138 @@ class Grapher extends Base {
         const high = size / 2;
         const interpolateCoord = v => interpolate(low, high, v / (density - 1));
 
-        const values = new Float32Array(density * density);
-        for (let i = 0; i < density; i++) {
-            for (let j = 0; j < density; j++) {
-                values[i * density + j] = f(interpolateCoord(j), interpolateCoord(i));
-            }
-        }
+        const values: Float32Array[] = new Array(density).fill(undefined);
+        values.forEach((_, i, self) => {
+            self[i] = new Float32Array(density);
+            self[i].forEach((_, j, row) => {
+                row[j] = f(interpolateCoord(j), interpolateCoord(i));
+            });
+        });
 
-        const buf = this.buffer;
+        const points: vec3[][] = new Array(density).fill(undefined);
+        points.forEach((_, i, self) => {
+            self[i] = new Array(density).fill(undefined);
+            self[i].forEach((_, j, row) => {
+                row[j] = vec3.fromValues(interpolateCoord(j), interpolateCoord(i), values[i][j]);
+            });
+        });
 
-        const fullData = new Float32Array(Grapher.getVertexCount(density, filled) * 3);
+        const triangleNormals: [vec3, vec3][][] = new Array(density - 1).fill(undefined);
+        triangleNormals.forEach((_, i, self) => {
+            self[i] = new Array(density - 1).fill(undefined);
+            self[i].forEach((_, j, row) => {
+                const calcTriangleNormal = (a: vec3, b: vec3, c: vec3) => {
+                    b = vec3.clone(b);
+                    c = vec3.clone(c);
 
-        debugger;
+                    const ab = vec3.sub(b, b, a);
+                    const ac = vec3.sub(c, c, a);
+
+                    const normal = vec3.cross(ab, ab, ac);
+                    vec3.normalize(normal, normal);
+
+                    return normal;
+                }
+
+                // square points going counter-clockwise
+                const a = points[i][j];
+                const b = points[i][j + 1];
+                const c = points[i + 1][j + 1];
+                const d = points[i + 1][j];
+                
+                const bottomNormal = calcTriangleNormal(a, b, c);
+                const topNormal = calcTriangleNormal(a, c, d);
+
+                row[j] = [bottomNormal, topNormal];
+            });
+        });
+
+        const vertexNormals: vec3[][] = new Array(density).fill(undefined);
+        vertexNormals.forEach((_, i, self) => {
+            self[i] = new Array(density).fill(undefined);
+            self[i].forEach((_, j, row) => {
+                if (i == 0 || i == density - 1 || j == 0 || j == density - 1) {
+                    row[j] = vec3.fromValues(0.0, 0.0, 1.0);
+                    return;
+                }
+
+                const triangleNormalCoords: [number, number, number][] = [
+                    [i, j, 0],
+                    [i, j, 1],
+                    [i - 1, j - 1, 0],
+                    [i - 1, j - 1, 1],
+                    [i, j - 1, 0],
+                    [i - 1, j, 1],
+                ];
+
+                const vertexNormal = triangleNormalCoords.reduce((curr, [y, x, c]) => {
+                    const normal = triangleNormals[y][x][c];
+                    return vec3.add(curr, curr, normal);
+                }, vec3.create());
+
+                vec3.normalize(vertexNormal, vertexNormal);
+
+                row[j] = vertexNormal;
+            });
+        });
+
+        const vertexData = new Float32Array(Grapher.getVertexCount(density, filled) * 3);
+        const normalData = new Float32Array(Grapher.getVertexCount(density, filled) * 3);
+
+        let currentCell = 0;
+        let currentNormalCell = 0;
 
         if (filled) {
-            let currentCell = 0;
             for (let i = 0; i < density - 1; i++) {
                 for (let j = 0; j < density - 1; j++) {
-                    let points = [
+                    let triangleCoords = [
+                        // bottom triangle
                         [i, j],
                         [i, j + 1],
                         [i + 1, j + 1],
+                        // top triangle
                         [i, j],
-                        [i + 1, j],
                         [i + 1, j + 1],
+                        [i + 1, j],
                     ];
 
                     if ((i == 200 || i == 400) && j == 250)
                         debugger;
 
-                    points.forEach(([y, x]) => {
-                        fullData[currentCell++] = interpolateCoord(x);
-                        fullData[currentCell++] = interpolateCoord(y);
-                        fullData[currentCell++] = values[y * density + x];
+                    triangleCoords.forEach(([y, x]) => {
+                        const point = points[y][x];
+                        vertexData[currentCell++] = point[0];
+                        vertexData[currentCell++] = point[1];
+                        vertexData[currentCell++] = point[2];
+                        
+                        const normal = vertexNormals[y][x];
+                        normalData[currentNormalCell++] = normal[0];
+                        normalData[currentNormalCell++] = normal[1];
+                        normalData[currentNormalCell++] = normal[2];
                     });
                 }
             }
         } else {
-            let currentCell = 0;
             for (let y = 0; y < density; y++) {
                 for (let x = 0; x < density; x++) {
-                    fullData[currentCell++] = interpolateCoord(x);
-                    fullData[currentCell++] = interpolateCoord(y);
-                    fullData[currentCell++] = values[y * density + x];
+                    const point = points[y][x];
+                    vertexData[currentCell++] = point[0];
+                    vertexData[currentCell++] = point[1];
+                    vertexData[currentCell++] = point[2];
+
+                    const normal = vertexNormals[y][x];
+                    normalData[currentNormalCell++] = normal[0];
+                    normalData[currentNormalCell++] = normal[1];
+                    normalData[currentNormalCell++] = normal[2];
                 }
             }
         }
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-        gl.bufferData(gl.ARRAY_BUFFER, fullData, gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, vertexData, gl.STATIC_DRAW);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, normalData, gl.STATIC_DRAW);
     }
 
     render(rotationMatrix: mat4, zoom: number) {
@@ -321,13 +602,14 @@ class Grapher extends Base {
 
         const startingMatrix = this.getCenterMatrix();
 
-        this.setupProgram(
+        this.setupLightProgram(
             startingMatrix,
             rotationMatrix,
-            vec4.fromValues(0.0, 1.0, 0.0, 1.0),
             zoom,
             fogColor,
             fogDensity,
+            vec3.normalize(vec3.create(), vec3.fromValues(0.5, 0.7, 1)),
+            vec4.fromValues(0.2, 1, 0.2, 1)
         );
 
         const { filled, density } = this.properties!;
@@ -425,16 +707,16 @@ const onKeyDown = (event: KeyboardEvent, args: {grapher: Grapher, properties: Pr
 
     switch (key) {
     case "ArrowUp":
-        args.properties.rotationVertical += 0.1;
+        args.properties.rotationVertical += Math.PI / 32;
         break;
     case "ArrowDown":
-        args.properties.rotationVertical -= 0.1;
+        args.properties.rotationVertical -= Math.PI / 32;
         break;
     case "ArrowLeft":
-        args.properties.rotationHorizontal -= 0.1;
+        args.properties.rotationHorizontal -= Math.PI / 32;
         break;
     case "ArrowRight":
-        args.properties.rotationHorizontal += 0.1;
+        args.properties.rotationHorizontal += Math.PI / 32;
         break;
     case "+":
         args.properties.zoom += 1;
@@ -491,25 +773,46 @@ const plotMain = () => {
         return;
     }
 
-    const shaderProgram = WebGLUtils.initShaderProgram(gl, vertexShaderSource, fragmentShaderSource)!;
+    const lightSources = getShaderSources(true);
+    const lightShaderProgram = WebGLUtils.initShaderProgram(gl, lightSources.vertexShaderSource, lightSources.fragmentShaderSource)!;
 
-    const programInfo: ProgramInfo = {
-        program: shaderProgram,
+    const lightProgramInfo: LightProgramInfo = {
+        program: lightShaderProgram,
         attribLocations: {
-            vertexPosition: gl.getAttribLocation(shaderProgram, "aVertexPosition"),
-            vertexColor: gl.getAttribLocation(shaderProgram, "aVertexColor"),
+            vertexPosition: gl.getAttribLocation(lightShaderProgram, "aVertexPosition"),
+            vertexNormal: gl.getAttribLocation(lightShaderProgram, "aVertexNormal"),
         },
         uniformLocations: {
-            zoom: gl.getUniformLocation(shaderProgram, "uZoom")!,
-            projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix')!,
-            startingMatrix: gl.getUniformLocation(shaderProgram, 'uStartingMatrix')!,
-            rotationMatrix: gl.getUniformLocation(shaderProgram, 'uRotationMatrix')!,
-            fogColor: gl.getUniformLocation(shaderProgram, 'uFogColor')!,
-            fogDensity: gl.getUniformLocation(shaderProgram, 'uFogDensity')!,
+            zoom: gl.getUniformLocation(lightShaderProgram, "uZoom")!,
+            projectionMatrix: gl.getUniformLocation(lightShaderProgram, 'uProjectionMatrix')!,
+            worldMatrix: gl.getUniformLocation(lightShaderProgram, 'uWorldMatrix')!,
+            worldInverseTransposeMatrix: gl.getUniformLocation(lightShaderProgram, 'uWorldInverseTransposeMatrix')!,
+            fogColor: gl.getUniformLocation(lightShaderProgram, 'uFogColor')!,
+            fogDensity: gl.getUniformLocation(lightShaderProgram, 'uFogDensity')!,
+            reverseLightDirection: gl.getUniformLocation(lightShaderProgram, 'uReverseLightDirection')!,
+            lightColor: gl.getUniformLocation(lightShaderProgram, 'uLightColor')!,
         }
     };
 
-    const grapher = new Grapher(gl, programInfo);
+    const noLightSources = getShaderSources(true);
+    const noLightShaderProgram = WebGLUtils.initShaderProgram(gl, noLightSources.vertexShaderSource, noLightSources.fragmentShaderSource)!;
+
+    const noLightProgramInfo: NoLightProgramInfo = {
+        program: noLightShaderProgram,
+        attribLocations: {
+            vertexPosition: gl.getAttribLocation(noLightShaderProgram, "aVertexPosition"),
+            vertexColor: gl.getAttribLocation(noLightShaderProgram, "aVertexColor"),
+        },
+        uniformLocations: {
+            zoom: gl.getUniformLocation(noLightShaderProgram, "uZoom")!,
+            projectionMatrix: gl.getUniformLocation(noLightShaderProgram, 'uProjectionMatrix')!,
+            worldMatrix: gl.getUniformLocation(noLightShaderProgram, 'uWorldMatrix')!,
+            fogColor: gl.getUniformLocation(noLightShaderProgram, 'uFogColor')!,
+            fogDensity: gl.getUniformLocation(noLightShaderProgram, 'uFogDensity')!,
+        }
+    };
+
+    const grapher = new Grapher(gl, lightProgramInfo, noLightProgramInfo);
     updateGrapher(grapher);
 
     const properties: Properties = {...initialProperties};
