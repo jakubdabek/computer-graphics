@@ -538,8 +538,8 @@ class Grapher extends Base {
             });
         });
 
-        const vertexData = new Float32Array(Grapher.getVertexCount(density, filled) * 3);
-        const normalData = new Float32Array(Grapher.getVertexCount(density, filled) * 3);
+        const vertexData = new Float32Array(Grapher.getVertexCount(density, filled) * 3 * 2);
+        const normalData = new Float32Array(Grapher.getVertexCount(density, filled) * 3 * 2);
 
         let currentCell = 0;
         let currentNormalCell = 0;
@@ -572,6 +572,18 @@ class Grapher extends Base {
                         normalData[currentNormalCell++] = normal[1];
                         normalData[currentNormalCell++] = normal[2];
                     });
+
+                    triangleCoords.reverse().forEach(([y, x]) => {
+                        const point = points[y][x];
+                        vertexData[currentCell++] = point[0];
+                        vertexData[currentCell++] = point[1];
+                        vertexData[currentCell++] = point[2]-0.1;
+                        
+                        const normal = vertexNormals[y][x];
+                        normalData[currentNormalCell++] = -normal[0];
+                        normalData[currentNormalCell++] = -normal[1];
+                        normalData[currentNormalCell++] = -normal[2];
+                    });
                 }
             }
         } else {
@@ -586,6 +598,13 @@ class Grapher extends Base {
                     normalData[currentNormalCell++] = normal[0];
                     normalData[currentNormalCell++] = normal[1];
                     normalData[currentNormalCell++] = normal[2];
+
+                    vertexData[currentCell++] = point[0];
+                    vertexData[currentCell++] = point[1];
+                    vertexData[currentCell++] = point[2] - 0.1;
+                    normalData[currentNormalCell++] = -normal[0];
+                    normalData[currentNormalCell++] = -normal[1];
+                    normalData[currentNormalCell++] = -normal[2];
                 }
             }
         }
@@ -608,13 +627,13 @@ class Grapher extends Base {
             zoom,
             fogColor,
             fogDensity,
-            vec3.normalize(vec3.create(), vec3.fromValues(0.5, 0.7, 1)),
+            vec3.normalize(vec3.create(), vec3.fromValues(0.5, 0.7, 0.3)),
             vec4.fromValues(0.2, 1, 0.2, 1)
         );
 
         const { filled, density } = this.properties!;
         const mode = filled ? gl.TRIANGLES : gl.POINTS;
-        gl.drawArrays(mode, 0.0, Grapher.getVertexCount(density, filled));
+        gl.drawArrays(mode, 0.0, Grapher.getVertexCount(density, filled) * 2);
 
         this.grid!.render(rotationMatrix, zoom);
     }
