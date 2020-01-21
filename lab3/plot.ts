@@ -702,6 +702,7 @@ const functions = [
     (x: number, y: number) => x * y / 6.0,
     (x: number, y: number) => Math.trunc(x) * Math.cos(y),
     (x: number, y: number) => Math.tan(x) * Math.tanh(y),
+    (x: number, y: number) => Math.sin(x * x * y * y),
 ];
 
 let functionPtr = 0;
